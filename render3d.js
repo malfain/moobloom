@@ -970,6 +970,15 @@
       if (treeGroup) { scene.remove(treeGroup); treeGroup.userData.dispose(); }
       treeGroup = RL.makeTrees(); scene.add(treeGroup);
     }
+    if (RL && R.groundTiles && R.groundTiles.length) {   // pemain mengecat tanah: gambar ulang petak itu saja (ringan)
+      ground3.repaintGround(R.groundTiles); R.groundTiles.length = 0; R.grassAt = now;
+    }
+    if (RL && R.grassAt && R.painting == null && now - R.grassAt > 250) {   // rumput disusun ulang sekali setelah selesai mengecat
+      R.grassAt = 0;
+      if (grassMesh) { scene.remove(grassMesh); grassMesh.dispose(); }
+      grassMesh = RL.makeGrass(renderer.userData.lite); scene.add(grassMesh);
+      applyQuality();
+    }
     if (RL) {
       // gambar ulang hanya petak yang berubah (dicangkul, disiram, diratakan)
       const changed = [];

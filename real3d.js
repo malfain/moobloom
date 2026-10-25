@@ -171,6 +171,24 @@
     return {
       material,
       repaint(list) { for (const [tx, ty] of list) paint(tx, ty); map.needsUpdate = bump.needsUpdate = true; },
+      // jenis tanah berubah di beberapa petak (pemain mengecat ladang/jalan): hitung ulang lapisan dasar petak itu + tetangganya saja
+      repaintGround(list) {
+        base.grid = S.ground; base.key = base.grid.join('|');
+        const seen = new Set();
+        for (const [tx, ty] of list) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const x0 = tx + dx, y0 = ty + dy, k = x0 + ',' + y0;
+          if (x0 < 0 || y0 < 0 || x0 >= MW || y0 >= MH || seen.has(k)) continue;
+          seen.add(k);
+          for (let y = y0 * PX; y < (y0 + 1) * PX; y++) for (let x = x0 * PX; x < (x0 + 1) * PX; x++) {
+            shadeBase((x + 0.5) / PX, (y + 0.5) / PX, base.grid, out);
+            const o = (y * W + x) * 4;
+            base.col[o] = out[0]; base.col[o + 1] = out[1]; base.col[o + 2] = out[2];
+            base.hgt[o] = base.hgt[o + 1] = base.hgt[o + 2] = out[3];
+          }
+          paint(x0, y0);
+        }
+        map.needsUpdate = bump.needsUpdate = true;
+      },
       repaintAll() {
         // simpanan dengan peta tanah lain (seharusnya tidak terjadi): hitung ulang lapisan dasar
         if (S.ground.join('|') !== base.key) { base.grid = S.ground; base.key = base.grid.join('|'); base.row = 0; }

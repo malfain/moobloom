@@ -791,8 +791,9 @@ function paintAt(tx, ty) {
   S.ground[ty][tx] = t.to;
   R.paintCount = (R.paintCount || 0) + 1; R.paintCost = (R.paintCost || 0) + t.price;
   burst(tx, ty, t.to === 'path' ? '#c9b48a' : t.to === 'field' ? '#8a5a32' : '#6cc04a', 4);
-  clearTimeout(paintTimer);   // susun ulang tanah & rumput 3D sekali setelah selesai mengecat (bukan tiap petak)
-  paintTimer = setTimeout(() => { R.worldVer = (R.worldVer || 0) + 1; if (R.buildMode) renderBuildBar(); }, 150);
+  (R.groundTiles || (R.groundTiles = [])).push([tx, ty]);   // renderer 3D menggambar ulang petak ini saja
+  clearTimeout(paintTimer);
+  paintTimer = setTimeout(() => { if (R.buildMode) renderBuildBar(); }, 150);
 }
 function startPaint(kind) { R.build = null; R.paint = kind; R.paintCount = 0; R.paintCost = 0; R.paintWarned = false; renderBuildBar(); }
 function openBuild() { if (!S || R.modal) return; hideSeedPop(); R.buildMode = true; R.build = null; renderBuildBar(); }
