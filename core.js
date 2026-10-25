@@ -767,8 +767,36 @@ function sellDeco(id) {
 }
 
 // ---------- panel mode bangun ----------
+// ===== cat tanah (mode bangun): pemain membuat ladang / jalan di mana saja, atau mengembalikannya jadi rumput =====
+const TERRAIN = {
+  ladang: {name: 'Ladang', icon: '🟫', price: 10, to: 'field', note: 'tanah untuk bedeng'},
+  jalan:  {name: 'Jalan', icon: '🪨', price: 5, to: 'path', note: 'untuk lewat & hiasan'},
+  rumput: {name: 'Rumput', icon: '🌱', price: 0, to: 'grass', note: 'hapus jalan / ladang kosong'},
+};
+let paintTimer = null;
+function canPaint(kind, tx, ty) {
+  const t = TERRAIN[kind];
+  if (!t || tx < 1 || ty < 1 || tx > MW - 2 || ty > MH - 2 || tileLocked(tx, ty)) return false;
+  const g = S.ground[ty][tx], o = S.obj[ty][tx];
+  if (g === 'water' || g === t.to || S.soil[ty][tx] || structAtTile(tx, ty)) return false;
+  if (o && !(DEBRIS.has(o) && t.to !== 'path') && o !== 'weed') return false;   // pohon, bangunan, dll. tidak bisa ditimpa
+  return true;
+}
+function paintAt(tx, ty) {
+  const kind = R.paint, t = TERRAIN[kind];
+  if (!t || !canPaint(kind, tx, ty)) return;
+  if (S.gold < t.price) { if (!R.paintWarned) { R.paintWarned = true; msg('Uangmu tidak cukup.'); } return; }
+  if (t.price) cash(-t.price, 'bangun');
+  if (S.obj[ty][tx] === 'weed' && t.to === 'path') S.obj[ty][tx] = null;
+  S.ground[ty][tx] = t.to;
+  R.paintCount = (R.paintCount || 0) + 1; R.paintCost = (R.paintCost || 0) + t.price;
+  burst(tx, ty, t.to === 'path' ? '#c9b48a' : t.to === 'field' ? '#8a5a32' : '#6cc04a', 4);
+  clearTimeout(paintTimer);   // susun ulang tanah & rumput 3D sekali setelah selesai mengecat (bukan tiap petak)
+  paintTimer = setTimeout(() => { R.worldVer = (R.worldVer || 0) + 1; if (R.buildMode) renderBuildBar(); }, 150);
+}
+function startPaint(kind) { R.build = null; R.paint = kind; R.paintCount = 0; R.paintCost = 0; R.paintWarned = false; renderBuildBar(); }
 function openBuild() { if (!S || R.modal) return; hideSeedPop(); R.buildMode = true; R.build = null; renderBuildBar(); }
-function closeBuild() { R.buildMode = false; R.build = null; $('buildBar').hidden = true; }
+function closeBuild() { R.buildMode = false; R.build = null; R.paint = null; R.painting = null; $('buildBar').hidden = true; }
 function startPlace(kind) {
   const d = BUILD[kind], f = viewFocus(), cx = Math.floor(f.x / T), cy = Math.floor(f.y / T);
   R.build = {kind, x: d.deco ? cx : cx - Math.floor(d.w / 2), y: d.deco ? cy : cy - 2};
@@ -788,9 +816,18 @@ function buildTap(tx, ty) {
 }
 function renderBuildBar() {
   const bar = $('buildBar'); bar.hidden = false;
+  if (R.paint) {
+    const t = TERRAIN[R.paint];
+    bar.innerHTML = `<div class="bb-title">${t.icon} ${t.name}${t.price ? ` · ${t.price} G/petak` : ' · gratis'} <span class="muted">· ${S.gold.toLocaleString('id-ID')} G</span></div>
+      <div class="bb-hint">Ketuk atau geser jari di peta untuk mengecat petak. ${R.paintCount ? `Sudah ${R.paintCount} petak${R.paintCost ? ` (−${R.paintCost} G)` : ''}.` : ''}<br><span class="muted">Tidak bisa di atas bedeng, pohon, bangunan, air, atau lahan yang belum dibeli.</span></div>
+      <div class="bb-row">${Object.entries(TERRAIN).map(([k, x]) => `<button class="btn${k === R.paint ? ' primary' : ''}" data-paint="${k}">${x.icon} ${x.name}</button>`).join('')}<button class="btn primary" data-act="paintdone">✓ Selesai</button></div>`;
+    return;
+  }
   if (!R.build) {
     bar.innerHTML = `<div class="bb-title">🔨 Mode bangun <span class="muted">· ${S.gold.toLocaleString('id-ID')} G</span></div>
       <div class="bb-list">${Object.entries(BUILD).map(([k, d]) => `<button class="bb-item" data-k="${k}" ${S.gold < d.price ? 'disabled' : ''}><span class="bb-ico">${d.icon}</span><b>${d.name}</b><small>${d.price.toLocaleString('id-ID')} G${d.cap ? ' · ' + d.cap + ' hewan' : ''}${d.note ? ' · ' + d.note : ''}</small></button>`).join('')}</div>
+      <div class="bb-title" style="margin-top:6px">🗺️ Tanah <span class="muted">· ketuk/geser di peta</span></div>
+      <div class="bb-list">${Object.entries(TERRAIN).map(([k, t]) => `<button class="bb-item" data-paint="${k}"><span class="bb-ico">${t.icon}</span><b>${t.name}</b><small>${t.price ? t.price + ' G/petak' : 'gratis'} · ${t.note}</small></button>`).join('')}</div>
       <div class="bb-row"><button class="btn" data-act="move">↔ Pindahkan</button><button class="btn primary" data-act="done">Selesai</button></div>`;
     return;
   }
@@ -807,7 +844,9 @@ $('buildBar').addEventListener('click', e => {
   const b = e.target.closest('button');
   if (!b || !S) return;
   if (b.dataset.k) return startPlace(b.dataset.k);
+  if (b.dataset.paint) return startPaint(b.dataset.paint);
   const act = b.dataset.act;
+  if (act === 'paintdone') { R.paint = null; return renderBuildBar(); }
   if (act === 'done') return closeBuild();
   if (act === 'move') { R.build = {pick: true}; return renderBuildBar(); }
   if (act === 'cancel') { R.build = null; return renderBuildBar(); }
@@ -2070,6 +2109,7 @@ addEventListener('pointerdown', e => {
   const w = worldAt(e);
   if (!w) return;
   const [wx, wy] = w, tx = Math.floor(wx / T), ty = Math.floor(wy / T);
+  if (R.buildMode && R.paint) { R.painting = pid; paintAt(tx, ty); return; }   // cat tanah: ketuk/geser
   if (R.buildMode) {   // mode bangun: ketuk = taruh/pilih; geser = lihat sekitar (tanpa karakter)
     if (R.noChar) pan = {pid, x: e.clientX, y: e.clientY, moved: false, build: [tx, ty], cx: e.clientX, cy: e.clientY};
     else buildTap(tx, ty);
@@ -2102,6 +2142,11 @@ addEventListener('pointermove', e => {
     const [a, b] = [...pointers.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]);
     if (pinch.d > 0 && d > 0 && RND === Renderers['3d']) R.zoom = clamp(R.zoom * pinch.d / d, 0.55, 1.8);
     pinch.d = d; return;
+  }
+  if (R.painting != null && e.pointerId === R.painting) {
+    if (!R.paint || R.modal || (e.pointerType === 'mouse' && !(e.buttons & 1))) { R.painting = null; return; }
+    const w = worldAt(e); if (w) paintAt(Math.floor(w[0] / T), Math.floor(w[1] / T));
+    return;
   }
   if (pan && (R.modal || (e.pointerType === 'mouse' && !(e.buttons & 1)))) { pan = null; return; }
   if (pan && e.pointerId === pan.pid) {   // geser kamera mengikuti jari/mouse
@@ -2183,7 +2228,8 @@ function endDrag(e) {
     refreshHotbar();
   }
 }
-addEventListener('pointerup', endDrag);
+addEventListener('pointerup', e => { if (e.pointerId === R.painting) R.painting = null; endDrag(e); });
+addEventListener('pointercancel', e => { if (e.pointerId === R.painting) R.painting = null; });
 addEventListener('pointercancel', endDrag);
 addEventListener('blur', () => { endDrag(); pan = pinch = null; pointers.clear(); });
 addEventListener('contextmenu', e => { if (e.target.id === 'game' || e.target.id === 'game3d') e.preventDefault(); endDrag(); });
@@ -2317,7 +2363,7 @@ function boot() {
 }
 
 // Antarmuka uji untuk otomatisasi / konsol.
-window.game = { openSeasons, staffTick, cash, openFinance, levelInfo, addXp, STAFF, hireStaff, fireStaff, openStaff, staffWork,
+window.game = { TERRAIN, canPaint, paintAt, startPaint, openSeasons, staffTick, cash, openFinance, levelInfo, addXp, STAFF, hireStaff, fireStaff, openStaff, staffWork,
   get S() { return S; }, R, CROPS, TOOLS, ANIMALS, FRUITS, REGIONS, BUILD, canPlace, placeNew, moveStruct, sellDeco, openBuild, closeBuild, buildTap, startPlace, unlockRegion, plantTree, fruitTap, buyAnimal, migrate, validSave, feedAnimal, collectFrom, animalAtPoint, drag,
   start: () => startGame(newGame(), false),
   get RND() { return RND; }, emit, onGame, turn, cycleCamera,
