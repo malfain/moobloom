@@ -46,6 +46,34 @@
     s.connect(f); f.connect(gn); gn.connect(master);
     s.start(t, Math.random() * 1.5); s.stop(t + dur + 0.02);
   }
+  // air dituang dari gembor: aliran air + banyak percikan tetes acak + sesekali bunyi "plip"
+  function pour(dur) {
+    if (!ac || muted) return;
+    const t0 = ac.currentTime;
+    // aliran: derau pita sempit yang bergelombang pelan (gemericik)
+    const s = ac.createBufferSource(), bp = ac.createBiquadFilter(), g = ac.createGain(), lfo = ac.createOscillator(), lg = ac.createGain();
+    s.buffer = noiseBuf; bp.type = 'bandpass'; bp.frequency.value = 1100; bp.Q.value = 1.2;
+    lfo.frequency.value = 7; lg.gain.value = 260; lfo.connect(lg); lg.connect(bp.frequency);
+    g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.13, t0 + 0.08); g.gain.setValueAtTime(0.13, t0 + dur - 0.2); g.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+    s.connect(bp); bp.connect(g); g.connect(master);
+    s.start(t0, Math.random()); s.stop(t0 + dur + 0.05); lfo.start(t0); lfo.stop(t0 + dur + 0.05);
+    // percikan tetes yang jatuh ke tanah
+    for (let i = 0; i < 26; i++) {
+      const t = t0 + 0.05 + Math.random() * (dur - 0.1), d = 0.025 + Math.random() * 0.04;
+      const ds = ac.createBufferSource(), f = ac.createBiquadFilter(), dg = ac.createGain();
+      ds.buffer = noiseBuf; f.type = 'bandpass'; f.frequency.value = 1800 + Math.random() * 3200; f.Q.value = 3 + Math.random() * 4;
+      dg.gain.setValueAtTime(0.06 + Math.random() * 0.08, t); dg.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      ds.connect(f); f.connect(dg); dg.connect(master); ds.start(t, Math.random() * 1.5); ds.stop(t + d + 0.01);
+    }
+    // beberapa "plip" (tetes jatuh ke genangan)
+    for (let i = 0; i < 4; i++) {
+      const t = t0 + 0.1 + Math.random() * (dur - 0.2), f0 = 900 + Math.random() * 700;
+      const o = ac.createOscillator(), og = ac.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f0 * 1.9, t + 0.05);
+      og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(0.035, t + 0.005); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+      o.connect(og); og.connect(master); o.start(t); o.stop(t + 0.08);
+    }
+  }
   function buzz(pattern) {
     // getar hanya diizinkan setelah pengguna menyentuh/mengetuk halaman
     if (muted || !navigator.vibrate || (navigator.userActivation && !navigator.userActivation.hasBeenActive)) return;
@@ -54,7 +82,7 @@
 
   const TOOL_SFX = {
     cangkul:  () => { noise(0.14, 0.4, 450); tone(85, 0.12, 'triangle', 0.25, -30); buzz(25); },
-    penyiram: () => { noise(0.4, 0.16, 2600, 'highpass'); buzz(10); },
+    penyiram: () => { pour(0.9); buzz(10); },
     sabit:    () => { noise(0.16, 0.25, 3800, 'bandpass'); buzz(12); },
     palu:     () => { tone(190, 0.09, 'square', 0.14, -60); noise(0.22, 0.35, 1300); buzz(40); },
     kapak:    () => { tone(150, 0.07, 'square', 0.12, -40); noise(0.12, 0.35, 900); buzz(35); },
@@ -98,6 +126,7 @@
   }, 900);
 
   window.FX5D = {
+    pour,
     get muted() { return muted; },
     toggleMute() {
       muted = !muted;

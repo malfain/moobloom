@@ -941,12 +941,23 @@ function wantedTrack() {
   if (!S || !R.running) return 'judul';
   return S.time >= 1080 || S.time < DAY_START ? 'malam' : ['semi', 'panas', 'gugur', 'dingin'][S.season];
 }
+let musicOff = false;   // pemain mematikan musik (efek suara tetap)
+try { musicOff = localStorage.getItem('kebunPelangi.music') === '0'; } catch (e) { /* tanpa penyimpanan */ }
 function syncMusic() {
   if (!window.Music) return;
-  if (window.FX5D && FX5D.muted) { if (Music.playing) Music.stop(); return; }
+  if (musicOff || (window.FX5D && FX5D.muted)) { if (Music.playing) Music.stop(); return; }
   if (Music.playing !== wantedTrack()) Music.play(wantedTrack());
 }
 setInterval(syncMusic, 1000);
+function toggleMusic() {
+  musicOff = !musicOff;
+  try { localStorage.setItem('kebunPelangi.music', musicOff ? '0' : '1'); } catch (e) { /* tanpa penyimpanan */ }
+  $('musicBtn').textContent = musicOff ? '🔇 Musik' : '🎵 Musik';
+  msg(musicOff ? 'Musik dimatikan. Efek suara tetap menyala.' : 'Musik dinyalakan.');
+  syncMusic();
+}
+$('musicBtn').textContent = musicOff ? '🔇 Musik' : '🎵 Musik';
+$('musicBtn').addEventListener('click', e => { e.currentTarget.blur(); toggleMusic(); });
 // browser hanya mengizinkan suara setelah pemain menyentuh layar; jeda saat tab disembunyikan
 addEventListener('pointerdown', () => { if (window.Music) { Music.resume(); syncMusic(); } }, true);
 addEventListener('keydown', () => { if (window.Music) { Music.resume(); syncMusic(); } }, true);
