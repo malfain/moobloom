@@ -1026,7 +1026,7 @@ function addXp(n) {
 const STAFF_MAX = 5;
 const STAFF = {
   petani: {role: 'Petani', icon: '🌾', wage: 30, unit: 'bedeng', names: ['Pak Tani', 'Mas Budi', 'Kang Ujang', 'Pak Darto', 'Bang Iwan'],
-    jobs: ['Memanen tanaman & buah yang matang', 'Menanam benih di bedeng kosong (memakai benih di tasmu)', 'Menyiram bedeng', 'Mencangkul bedeng baru bila benihmu lebih banyak dari bedeng kosong', 'Menanam bibit pohon buah di dekat kebun buah']},
+    jobs: ['Membersihkan tanaman layu (gagal panen karena ganti musim)', 'Memanen tanaman & buah yang matang', 'Menanam benih di bedeng kosong (memakai benih di tasmu)', 'Menyiram bedeng', 'Mencangkul bedeng baru bila benihmu lebih banyak dari bedeng kosong', 'Menanam bibit pohon buah di dekat kebun buah']},
   peternak: {role: 'Peternak', icon: '🐄', wage: 50, unit: 'hewan', names: ['Bu Ternak', 'Mbak Sri', 'Teh Euis', 'Bu Wati', 'Kak Rina'],
     jobs: ['Mengambil telur & susu', 'Mengisi tempat pakan & jerami (memakai stok di tasmu)', 'Mengelus hewan', 'Memotong babi yang sudah gemuk menjadi daging']},
 };
@@ -1060,7 +1060,8 @@ const nearView = (x, y) => { const f = viewFocus(); return Math.hypot(x - f.x, y
 const taken = (w, key) => S.shift.some(o => o !== w && o.tgt && o.tgt.key === key);
 function tileNeedsFarmer(tx, ty) {
   const s = S.soil[ty][tx];
-  if (!s || (s.crop && s.crop.dead)) return false;
+  if (!s) return false;
+  if (s.crop && s.crop.dead) return true;   // tanaman layu (gagal panen karena ganti musim): dibersihkan
   if (s.crop) return isMature(s.crop) || !s.watered;
   return !!farmSeed();
 }
@@ -1152,6 +1153,11 @@ function doFarm(w, t) {
     burst(t.tx, t.ty, '#8a5a32', 6); if (loud) emit('tool', 'cangkul');
   }
   const s = S.soil[t.ty][t.tx];
+  if (s.crop && s.crop.dead) {   // bersihkan tanaman layu
+    s.crop = null; w.done.bersih = (w.done.bersih || 0) + 1;
+    burst(t.tx, t.ty, '#a08050', 6); popAt(t.tx * T + 8, t.ty * T, '🧹 Dibersihkan', '#e8dcc0');
+    sound = 'clean';
+  }
   if (s.crop && isMature(s.crop)) {
     const def = CROPS[s.crop.type], n = Math.random() < w.luck ? 2 : 1;
     S.inv.crops[s.crop.type] = (S.inv.crops[s.crop.type] || 0) + n; S.stats.harvested += n; w.done.panen += n; if (n > 1) w.done.bonus++;
@@ -1166,7 +1172,7 @@ function doFarm(w, t) {
   const wet = s.crop && !s.watered;
   if (wet) { s.watered = true; w.done.siram++; burst(t.tx, t.ty, '#7fc8ff', 9); }
   if (!loud) return;
-  if (sound) emit(sound);
+  if (sound === 'clean') emit('tool', 'sabit'); else if (sound) emit(sound);
   if (wet) setTimeout(() => emit('tool', 'penyiram'), sound ? 280 : 0);   // bunyi air menyiram
 }
 function doRanch(w, t) {
@@ -1216,7 +1222,7 @@ function shiftReport() {
   const out = [];
   for (const w of S.shift || []) {
     const d = Object.fromEntries(Object.entries(w.done || {}).map(([k, v]) => [k, Math.max(0, Math.floor(+v) || 0)])), parts = w.job === 'petani'
-      ? [d.pohon && `menanam ${d.pohon} bibit pohon`, d.cangkul && `mencangkul ${d.cangkul} bedeng baru`, d.panen && `memanen ${d.panen}`, d.buah && `memetik ${d.buah} pohon`, d.tanam && `menanam ${d.tanam}`, d.siram && `menyiram ${d.siram} bedeng`]
+      ? [d.bersih && `membersihkan ${d.bersih} tanaman layu`, d.pohon && `menanam ${d.pohon} bibit pohon`, d.cangkul && `mencangkul ${d.cangkul} bedeng baru`, d.panen && `memanen ${d.panen}`, d.buah && `memetik ${d.buah} pohon`, d.tanam && `menanam ${d.tanam}`, d.siram && `menyiram ${d.siram} bedeng`]
       : [d.potong && `memotong ${d.potong} babi gemuk (+${d.daging} daging — jual lewat kotak kirim)`, d.hasil && `mengambil ${d.hasil} hasil ternak`, d.makan && `mengisi ${d.makan} porsi makan`, d.elus && `mengelus ${d.elus} hewan`];
     const did = parts.filter(Boolean);
     const left = w.left;   // dicatat saat jam pulang: masih ada kerjaan yang belum beres
