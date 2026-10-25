@@ -936,6 +936,22 @@ function unlockRegion(r) {
   msg(`${r.name} terbuka! Jelajahi lahan barumu.`);
 }
 
+/* ================= Musik latar (music.js): judul, lagu musim, malam ================= */
+function wantedTrack() {
+  if (!S || !R.running) return 'judul';
+  return S.time >= 1080 || S.time < DAY_START ? 'malam' : ['semi', 'panas', 'gugur', 'dingin'][S.season];
+}
+function syncMusic() {
+  if (!window.Music) return;
+  if (window.FX5D && FX5D.muted) { if (Music.playing) Music.stop(); return; }
+  if (Music.playing !== wantedTrack()) Music.play(wantedTrack());
+}
+setInterval(syncMusic, 1000);
+// browser hanya mengizinkan suara setelah pemain menyentuh layar; jeda saat tab disembunyikan
+addEventListener('pointerdown', () => { if (window.Music) { Music.resume(); syncMusic(); } }, true);
+addEventListener('keydown', () => { if (window.Music) { Music.resume(); syncMusic(); } }, true);
+document.addEventListener('visibilitychange', () => { if (window.Music) document.hidden ? Music.pause() : Music.resume(); });
+
 /* ================= Keterangan musim (ketuk kotak tanggal) ================= */
 const SEASON_ICON = ['🌸', '☀️', '🍂', '❄️'];
 function openSeasons() {
@@ -2037,7 +2053,8 @@ function toggleSound() {
   if (!window.FX5D) return;
   const muted = FX5D.toggleMute();
   $('sndBtn').textContent = muted ? 'Suara: mati' : 'Suara: nyala';
-  msg(muted ? 'Suara & getar dimatikan.' : 'Suara & getar dinyalakan.');
+  msg(muted ? 'Suara, musik & getar dimatikan.' : 'Suara, musik & getar dinyalakan.');
+  syncMusic();
 }
 $('modal').addEventListener('click', e => { if (e.target.id === 'modal' && !modalFresh()) closeModal(); });
 
