@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Moo &amp; Bloom Beta</title>
+<meta name="description" content="Moo &amp; Bloom — game bertani santai di browser: tanam, panen, dan rawat sapi, kambing, babi, dan ayam.">
+<meta property="og:title" content="Moo &amp; Bloom">
+<meta property="og:description" content="Game bertani santai di browser: tanam, panen, dan rawat ternakmu. Main gratis tanpa install!">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#7fb954">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐄</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Lilita+One&display=swap">
+<link rel="stylesheet" href="style.css?v=85">
+</head>
+<body>
+<canvas id="game" hidden aria-label="Dunia permainan Moo &amp; Bloom"></canvas>
+
+<div id="hud">
+  <div class="panel" id="datebox">
+    <div id="dateTxt">Semi, Hari 1</div>
+    <div id="timeRow"><span id="timeTxt">06:00</span><span id="wxTxt">Cerah</span></div>
+  </div>
+  <div class="right">
+    <div class="hudRow">
+      <div class="panel" id="lvlBox"><span id="lvlTxt">Lv 1</span><div id="xpBar"><div id="xpFill"></div></div></div>
+      <div class="panel" id="goldbox"><span class="coin"></span><span id="goldTxt">0</span><span>G</span></div>
+    </div>
+    <div class="panel" id="stamBox"><span>Tenaga</span><div id="stamBar"><div id="stamFill"></div></div></div>
+  </div>
+</div>
+<div id="keys">WASD/Panah: jalan<br>Spasi/J: pakai alat<br>E/K: periksa/ambil<br>1-8 / Q: ganti alat<br>R: ganti benih · I: tas<br>V: kamera · M: suara<br>Esc: menu</div>
+<div id="menuBtns">
+  <button class="panel mbtn" id="bagBtn">Tas</button>
+  <button class="panel mbtn" id="menuBtn">Menu</button>
+  <button class="panel mbtn" id="buildBtn">🔨 Bangun</button>
+  <button class="panel mbtn" id="staffBtn">👷 Karyawan</button>
+  <button class="panel mbtn" id="seasonBtn">📅 Musim</button>
+  <button class="panel mbtn" id="camBtn">Kamera</button>
+  <button class="panel mbtn" id="sndBtn">Suara: nyala</button>
+</div>
+<div class="panel" id="toolName">Cangkul</div>
+<div id="hotbar" class="panel"></div>
+<div id="msg" class="panel" hidden></div>
+<div id="seedPop" class="panel" hidden></div>
+<div id="buildBar" class="panel" hidden></div>
+<div id="beta">BETA v0.1</div>
+
+<div id="touch">
+  <div class="pad">
+    <button class="u" data-k="up" aria-label="Atas">▲</button>
+    <button class="l" data-k="left" aria-label="Kiri">◀</button>
+    <button class="r" data-k="right" aria-label="Kanan">▶</button>
+    <button class="d" data-k="down" aria-label="Bawah">▼</button>
+  </div>
+  <div class="ab">
+    <button class="a" id="btnA">Alat</button>
+    <button class="b" id="btnB">Ambil</button>
+  </div>
+</div>
+
+<div id="modal" hidden><div class="panel dialog" role="dialog" aria-modal="true" aria-labelledby="mTitle"><h2 id="mTitle"></h2><div class="body" id="mBody"></div><div class="btns" id="mBtns"></div></div></div>
+
+<div id="title">
+  <canvas id="titleBg" aria-hidden="true"></canvas>
+  <div class="panel box">
+    <h1>Moo &amp; Bloom</h1>
+    <div class="tag">BETA v0.1 · 5D</div>
+    <div class="sub">Game bertani santai.<br>Cangkul, tanam, siram, panen — dan rawat ternakmu.</div>
+    <div class="btns">
+      <button class="btn primary" id="contBtn" hidden>Lanjutkan</button>
+      <button class="btn" id="newBtn">Mulai Baru</button>
+    </div>
+    <div id="cloudBox" hidden></div>
+    <div class="mode" id="modeLink"></div>
+    <p class="muted" id="saveNote" hidden>Data simpanan rusak dan tidak bisa dimuat.</p>
+    <div class="help">
+      <b>Cara main:</b> jalan dengan WASD/panah (atau tombol arah di layar). Spasi memakai alat ke petak di depanmu, E untuk memeriksa, memanen, mengelus ayam, membuka toko, kotak kirim, dan pintu rumah.
+      Tanaman hanya tumbuh bila disiram tiap hari. Tidur di rumah untuk menyimpan permainan.
+    </div>
+  </div>
+</div>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script async src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/objects/Sky.js"></script>
+<script src="core.js?v=85"></script>
+<script src="render2d.js?v=85"></script>
+<script src="real3d.js?v=85"></script>
+<script src="render3d.js?v=85"></script>
+<script src="fx5d.js?v=85"></script>
+<script src="title-bg.js?v=85"></script>
+<script src="supabase-config.js?v=85"></script>
+<script src="cloud.js?v=85"></script>
+<script>boot();</script>
+</body>
+</html>
