@@ -87,12 +87,23 @@ function drawObj(o, tx, ty, sx, sy) {
     case 'deco': case 'flower': {
       const d = decoAt(tx, ty);
       if (!d) return;
-      if (d.kind === 'pagar') {
-        r(sx + 7, sy + 6, 2, 10, '#7a5534');
-        const is = (x, y) => { const e = decoAt(x, y); return e && e.kind === 'pagar'; };
-        if (is(tx + 1, ty)) { r(sx + 8, sy + 8, 8, 1, '#9a7450'); r(sx + 8, sy + 11, 8, 1); }
-        if (is(tx - 1, ty)) { r(sx, sy + 8, 8, 1, '#9a7450'); r(sx, sy + 11, 8, 1); }
-        if (is(tx, ty + 1)) r(sx + 7, sy + 12, 2, 4, '#7a5534');
+      if (d.kind === 'pagar' || d.kind === 'pagarputih') {
+        const pw = d.kind === 'pagarputih', post = pw ? '#f2eee6' : '#7a5534', rail = pw ? '#fbf8f2' : '#9a7450';
+        r(sx + 7, sy + 6, 2, 10, post);
+        const is = (x, y) => { const e = decoAt(x, y); return e && e.kind === d.kind; };
+        if (is(tx + 1, ty)) { r(sx + 8, sy + 8, 8, 1, rail); r(sx + 8, sy + 11, 8, 1); }
+        if (is(tx - 1, ty)) { r(sx, sy + 8, 8, 1, rail); r(sx, sy + 11, 8, 1); }
+        if (is(tx, ty + 1)) r(sx + 7, sy + 12, 2, 4, post);
+      } else if (d.kind === 'pagarhidup') {
+        r(sx, sy + 5, 16, 10, '#3f7a2c'); r(sx + 1, sy + 4, 14, 3, '#5a9a3a');
+      } else if (d.kind === 'jalanbatu') {
+        [[2, 2], [9, 3], [3, 9], [10, 10]].forEach(([x, y]) => { r(sx + x, sy + y, 5, 4, '#b8b2a6'); r(sx + x, sy + y + 3, 5, 1, '#8f897e'); });
+      } else if (d.kind === 'pohonek') {
+        r(sx + 7, sy + 8, 3, 8, '#6b4428'); r(sx + 1, sy - 4, 14, 12, '#3c6f24'); r(sx + 3, sy - 6, 10, 4, '#649f37');
+      } else if (d.kind === 'cemara') {
+        r(sx + 7, sy + 11, 2, 5, '#6b4428'); r(sx + 3, sy + 4, 10, 7, '#2f7d3c'); r(sx + 5, sy - 1, 6, 6, '#378c44'); r(sx + 7, sy - 4, 2, 4, '#42a04e');
+      } else if (d.kind === 'orangan') {
+        r(sx + 7, sy + 4, 2, 12, '#8a5a32'); r(sx + 3, sy + 6, 10, 2); r(sx + 5, sy + 5, 6, 5, '#c4372a'); r(sx + 6, sy + 1, 4, 4, '#e8d6a8'); r(sx + 4, sy, 8, 2, '#e0b94a');
       } else if (d.kind === 'bunga') {
         r(sx + 2, sy + 10, 12, 4, '#6b4a2e');
         [[3, 7, '#ff6fa8'], [7, 6, '#ffd84a'], [11, 7, '#ffffff'], [5, 9, '#b98cff'], [10, 9, '#ff8a3d']].forEach(([x, y, c]) => { r(sx + x, sy + y + 2, 1, 3, '#4a9a34'); r(sx + x - 1, sy + y, 3, 2, c); });
@@ -103,6 +114,31 @@ function drawObj(o, tx, ty, sx, sy) {
       } else if (d.kind === 'sprinkler') {
         r(sx + 4, sy + 13, 8, 3, '#9a9a94'); r(sx + 7, sy + 7, 2, 7, '#b8bec6'); r(sx + 5, sy + 5, 6, 2, '#2f7fd0'); r(sx + 7, sy + 4, 2, 1, '#d5dbe1');
         r(sx + 2, sy + 6, 1, 1, '#8fd3ff'); r(sx + 13, sy + 6, 1, 1); r(sx + 3, sy + 3, 1, 1); r(sx + 12, sy + 3, 1, 1);
+      } else if (d.kind === 'jalantunggul') {   // tanah berpasir + potongan tunggul
+        r(sx + 1, sy + 2, 14, 12, '#d9b27a');
+        [[2, 3], [9, 2], [5, 8], [11, 9], [2, 11]].forEach(([x, y]) => { r(sx + x, sy + y + 2, 4, 2, '#8a5a35'); r(sx + x, sy + y, 4, 2, '#e3b57e'); r(sx + x + 1, sy + y, 2, 1, '#b9834f'); });
+      } else if (d.kind === 'kayukering') {   // batang kayu tumbang berlumut + jamur merah
+        r(sx + 1, sy + 7, 13, 6, '#7a5232'); r(sx + 1, sy + 7, 13, 2, '#a9774a'); r(sx + 3, sy + 6, 6, 2, '#6fa03a');
+        r(sx + 13, sy + 7, 3, 6, '#d9b07a'); r(sx + 14, sy + 9, 1, 2, '#3a2412');
+        r(sx + 4, sy + 13, 1, 2, '#e9dfc8'); r(sx + 3, sy + 12, 3, 1, '#d9473a'); r(sx + 8, sy + 13, 1, 2, '#e9dfc8'); r(sx + 7, sy + 12, 3, 1, '#d9473a');
+      } else if (d.kind === 'sumur') {   // sumur batu beratap biru
+        r(sx + 3, sy + 9, 10, 6, '#c9c3b6'); r(sx + 3, sy + 12, 10, 1, '#8f897c'); r(sx + 4, sy + 8, 8, 2, '#2f5f73');
+        r(sx + 3, sy + 2, 1, 8, '#8a5a35'); r(sx + 12, sy + 2, 1, 8); r(sx + 4, sy + 4, 8, 1, '#8a5a35'); r(sx + 7, sy + 5, 2, 2, '#6e4628');
+        r(sx + 1, sy, 14, 2, '#4a6e9c'); r(sx + 3, sy - 2, 10, 2); r(sx + 6, sy - 3, 4, 1, '#36547a');
+      } else if (d.kind === 'kolam') {   // kolam kecil berbatu
+        r(sx + 1, sy + 4, 14, 10, '#6e8f3e'); r(sx + 2, sy + 5, 12, 8, '#3c8fa6'); r(sx + 3, sy + 6, 5, 1, '#bde9f1');
+        r(sx + 9, sy + 8, 3, 2, '#5fa548'); r(sx + 10, sy + 7, 1, 1, '#f7b3c6');
+        [[0, 6], [1, 12], [6, 13], [12, 12], [14, 7]].forEach(([x, y]) => r(sx + x, sy + y, 3, 2, '#b9b6ac'));
+        r(sx + 2, sy + 1, 1, 5, '#4e7f2a'); r(sx + 2, sy, 1, 2, '#7a4d2d');
+      } else if (d.kind === 'sungai') {   // aliran air yang menyambung ke sungai di sebelahnya
+        const is = (x, y) => { const e = decoAt(x, y); return e && e.kind === 'sungai'; };
+        // tepi rumput gelap hanya di sisi yang tidak menyambung (tanpa garis di sambungan antar petak)
+        const segs = [[3, 3, 10, 10]];
+        if (is(tx + 1, ty)) segs.push([8, 3, 8, 10]); if (is(tx - 1, ty)) segs.push([0, 3, 8, 10]);
+        if (is(tx, ty + 1)) segs.push([3, 8, 10, 8]); if (is(tx, ty - 1)) segs.push([3, 0, 10, 8]);
+        segs.forEach(([x, y, w, h]) => r(sx + x, sy + y, w, h, '#5e7f34'));
+        segs.forEach(([x, y, w, h]) => r(sx + x + (x === 0 ? 0 : 1), sy + y + (y === 0 ? 0 : 1), w - (x === 0 ? 0 : 1) - (x + w === 16 ? 0 : 1), h - (y === 0 ? 0 : 1) - (y + h === 16 ? 0 : 1), '#5fb0c4'));
+        r(sx + 6, sy + 7, 3, 1, '#bde9f1');
       } else if (d.kind === 'lampu') {
         r(sx + 7, sy + 3, 2, 12, '#2e2e2e'); r(sx + 5, sy + 14, 6, 2); r(sx + 5, sy, 6, 4, night() > 0.15 ? '#ffd86b' : '#fff2c0'); r(sx + 5, sy - 1, 6, 1, '#2e2e2e');
       }
@@ -293,7 +329,7 @@ function render() {
   const dl = [];
   for (let ty = ty0; ty <= ty1; ty++) for (let tx = Math.max(0, tx0 - 1); tx <= Math.min(MW - 1, tx1 + 1); tx++) {
     const o = S.obj[ty][tx], sx = tx * T - cx, sy = ty * T - cy;
-    if (o && o !== 'bld') dl.push({y: (ty + 1) * T - (o === 'weed' ? 2 : 0), f: () => drawObj(o, tx, ty, sx, sy)});
+    if (o && o !== 'bld') dl.push({y: o === 'flower' && decoAt(tx, ty) && ['jalanbatu', 'jalantunggul'].includes(decoAt(tx, ty).kind) ? ty * T : (ty + 1) * T - (o === 'weed' ? 2 : 0), f: () => drawObj(o, tx, ty, sx, sy)});
     const s = S.soil[ty][tx];
     if (s && s.crop) dl.push({y: (ty + 1) * T - 1, f: () => drawCrop(s.crop, sx, sy)});
   }

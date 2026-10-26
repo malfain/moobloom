@@ -101,6 +101,12 @@
       if (cloud && cloud.data) { try { cd = migrate(JSON.parse(cloud.data)); } catch (e) { cd = null; } if (cd && !validSave(cd)) cd = null; }
       const lbl = d => `Musim ${SEASONS[d.season]} Hari ${d.day}, Tahun ${d.year} · ${d.gold.toLocaleString('id-ID')} G`;
       if (!cd && !hasLocal) { done(cloudAt); return render(); }
+      if (!cd && cloud && cloud.data) {   // simpanan cloud tidak terbaca (mis. dibuat versi game yang lebih baru): jangan ditimpa diam-diam
+        openModal('Progres cloud', `<p>Progres di akunmu tidak bisa dibaca oleh versi game ini — mungkin dibuat versi yang lebih baru.</p><p>Muat ulang halaman dulu. Timpa progres cloud dengan progres perangkat ini?</p><p>📱 ${esc(lbl(local))}</p>`,
+          [{label: 'Muat ulang', primary: true, fn: () => location.reload()},
+           {label: 'Timpa', fn: push}]);
+        return render();
+      }
       if (!cd && !foreign) return push();
       if (!cd) {   // perangkat dipakai bergantian: jangan diam-diam memindahkan progres akun lain
         openModal('Progres akun lain', `<p>Progres di perangkat ini berasal dari akun Google lain:</p><p>📱 ${esc(lbl(local))}</p>

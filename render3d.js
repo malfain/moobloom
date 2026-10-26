@@ -7,6 +7,13 @@
   const TOON = !!(RL && RL.toon);                                 // 3D Kartun (bawaan)
   const structGroup = new THREE.Group(), ghostGroup = new THREE.Group();
   let structSig = '', ghostSig = '';
+  let flowerGroup = null;
+  // gaya ceria: rumpun bunga di tepi jalan (disusun ulang bersama rumput)
+  function rebuildFlowers() {
+    if (!RL || !RL.ceria) return;
+    if (flowerGroup) { scene.remove(flowerGroup); flowerGroup.userData.dispose && flowerGroup.userData.dispose(); }
+    flowerGroup = RL.makeFlowers(); scene.add(flowerGroup);
+  }
   let worldVer = 0, ground3 = null, skyCtl = null, soilState = null, worldOf = null, grassMesh = null, windowsLit = null, treeGroup = null;
 
   let renderer, scene, camera, sun, hemi, fxCanvas, fx;
@@ -152,9 +159,13 @@
     const sig = buildings().map(b => b.kind + b.x + ',' + b.y).join('|');
     if (sig === structSig) return;
     structSig = sig;
+    structGroup.traverse(o => { if (o.geometry && o.geometry.type === 'ExtrudeGeometry') o.geometry.dispose(); });   // atap dibuat baru tiap susun ulang
     structGroup.clear();
     for (const b of buildings()) structGroup.add(buildBuilding({...b, id: b.kind}));
     structGroup.add(buildFences());
+    const live = new Set();   // buang material jendela milik bangunan/lampu yang sudah tidak ada
+    scene.traverse(o => { if (o.material) live.add(o.material); });
+    for (let i = windowMats.length - 1; i >= 0; i--) if (!live.has(windowMats[i])) { windowMats[i].dispose(); windowMats.splice(i, 1); }
     windowsLit = null;
   }
   // pratinjau penempatan: hijau = bisa, merah = tidak
@@ -184,14 +195,48 @@
     if (!d) return G;
     const v = h2(tx, ty, 7);
     switch (d.kind) {
-      case 'pagar': {   // tiang + palang yang menyambung ke pagar tetangga
-        G.add(bx('#7a5534', 0, 0.3, 0, 0.09, 0.6, 0.09));
-        const m = pagarMask(tx, ty);
-        for (const [bit, dx, dz] of [[1, 1, 0], [2, -1, 0], [4, 0, 1], [8, 0, -1]]) if (m & bit)
-          for (const y of [0.24, 0.46]) G.add(bx('#9a7450', dx * 0.25, y, dz * 0.25, dx ? 0.5 : 0.05, 0.06, dz ? 0.5 : 0.05));
-        if (!m) for (const y of [0.24, 0.46]) G.add(bx('#9a7450', 0, y, 0, 0.7, 0.06, 0.05));
+      case 'pagar': case 'pagarputih': {   // tiang + palang yang menyambung ke pagar sejenis di sebelahnya
+        const pw = d.kind === 'pagarputih', post = pw ? '#f2eee6' : '#7a4d2d', rail = pw ? '#fbf8f2' : '#a06b3e';
+        G.add(bx(post, 0, 0.3, 0, 0.09, 0.6, 0.09));
+        const m = pagarMask(tx, ty, d.kind);
+        for (const [bit, dx, dz] of [[1, 1, 0], [2, -1, 0], [4, 0, 1], [8, 0, -1]]) if (m & bit) {
+          for (const y of [0.24, 0.46]) G.add(bx(rail, dx * 0.25, y, dz * 0.25, dx ? 0.5 : 0.05, 0.06, dz ? 0.5 : 0.05));
+          if (pw) for (const t of [0.17, 0.34]) G.add(bx(rail, dx * t, 0.27, dz * t, dx ? 0.05 : 0.04, 0.48, dz ? 0.05 : 0.04));   // bilah piket
+        }
+        if (!m) for (const y of [0.24, 0.46]) G.add(bx(rail, 0, y, 0, 0.7, 0.06, 0.05));
         break;
       }
+      case 'pagarhidup': {   // pagar tanaman: semak yang menyambung
+        const m = pagarMask(tx, ty, 'pagarhidup'), leafC = RL ? matV('#4a8a30') : '#4a8a30';
+        G.add(part(ICO(), leafC, 0, 0.28, 0, 0.62, 0.56, 0.62));
+        for (const [bit, dx, dz] of [[1, 1, 0], [2, -1, 0], [4, 0, 1], [8, 0, -1]]) if (m & bit) G.add(part(ICO(), leafC, dx * 0.3, 0.27, dz * 0.3, dx ? 0.5 : 0.56, 0.52, dz ? 0.5 : 0.56));
+        G.add(part(ICO(), RL ? matV('#6aa83e') : '#6aa83e', 0.05, 0.48, -0.04, 0.4, 0.26, 0.4));
+        break;
+      }
+      case 'jalanbatu':   // empat ubin batu pipih yang rapat
+        for (const [x, z, sx, sz, c] of [[-0.23, -0.24, 0.46, 0.42, '#c2bcae'], [0.24, -0.22, 0.44, 0.44, '#b3ad9f'], [-0.22, 0.24, 0.44, 0.44, '#aba596'], [0.24, 0.25, 0.46, 0.42, '#bfb9ab']]) {
+          const st = bx(c, x + (v - 0.5) * 0.04, 0.035, z, sx, 0.07, sz); st.rotation.y = (h2(tx, ty, Math.round(x * 10 + z * 7)) - 0.5) * 0.4; G.add(st);
+        }
+        break;
+      case 'pohonek': {   // pohon ek hias: batang tebal + tajuk rimbun
+        G.add(part(CYL(), '#6b4428', 0, 0.45, 0, 0.18, 0.9, 0.18));
+        for (const [x, y, z, s2, c] of [[0, 1.15, 0, 1.0, '#3c6f24'], [0.32, 1.05, 0.1, 0.62, '#4c862c'], [-0.3, 1.1, -0.1, 0.66, '#4c862c'], [0.05, 1.05, 0.34, 0.6, '#649f37'], [-0.08, 1.12, -0.32, 0.6, '#4c862c'], [0.06, 1.5, 0.02, 0.62, '#84b947']])
+          G.add(part(ICO(), RL ? matV(c) : c, x, y, z, s2, s2 * 0.85, s2));
+        G.rotation.y = v * 6;
+        break;
+      }
+      case 'cemara':
+        if (RL) { G.add(part(RL.hayPineGeo(Math.floor(v * 3)), matV('#ffffff'), 0, 0, 0, 0.6, 0.6, 0.6)); G.rotation.y = v * 6; break; }   // sama dengan cemara hutan
+        G.add(part(CYL(), '#6b4428', 0, 0.25, 0, 0.12, 0.5, 0.12));
+        ['#2a6f36', '#2f7d3c', '#378c44', '#42a04e'].forEach((c, k) => G.add(part(CONE(), c, 0, 0.6 + k * 0.32, 0, 0.95 - k * 0.2, 0.6, 0.95 - k * 0.2)));
+        break;
+      case 'orangan':   // orang-orangan sawah: tiang silang, baju, topi jerami
+        G.add(bx('#8a5a32', 0, 0.5, 0, 0.06, 1.0, 0.06)); G.add(bx('#8a5a32', 0, 0.72, 0, 0.7, 0.05, 0.05));
+        G.add(bx('#c4372a', 0, 0.62, 0, 0.32, 0.34, 0.16)); G.add(bx('#f6c343', 0, 0.62, 0.085, 0.3, 0.04, 0.01));
+        G.add(part(SPH(), '#e8d6a8', 0, 0.92, 0, 0.22, 0.22, 0.22));
+        G.add(part(CYL(), '#e0b94a', 0, 1.02, 0, 0.42, 0.03, 0.42)); G.add(part(CYL(), '#e0b94a', 0, 1.08, 0, 0.2, 0.1, 0.2));
+        G.rotation.y = (v - 0.5) * 0.8;
+        break;
       case 'bunga':
         G.add(part(CYL(), '#6b4a2e', 0, 0.04, 0, 0.8, 0.08, 0.8));
         for (let i = 0; i < 7; i++) {
@@ -200,10 +245,87 @@
           G.add(part(SPH(), col, Math.cos(a) * r, 0.26, Math.sin(a) * r, 0.11, 0.08, 0.11));
         }
         break;
-      case 'semak':
-        G.add(part(ICO(), RL ? matV('#3f7a2c') : '#3f8a32', 0, 0.3, 0, 0.85, 0.6, 0.85));
-        G.add(part(ICO(), RL ? matV('#4f8f36') : '#4f9a3a', 0.15, 0.48, -0.05, 0.5, 0.4, 0.5));
+      case 'semak': {   // semak bulat penuh bunga kuning
+        const lf = c => RL ? matV(c) : c;
+        for (const [x, y, z, s2, c] of [[0, 0.3, 0, 0.8, '#4f8a2e'], [-0.24, 0.26, 0.12, 0.5, '#5f9a36'], [0.25, 0.27, 0.1, 0.5, '#5f9a36'], [0, 0.26, -0.22, 0.5, '#4f8a2e'], [0.02, 0.55, 0.02, 0.5, '#79b545']])
+          G.add(part(ICO(), lf(c), x, y, z, s2, s2 * 0.85, s2));
+        for (let i = 0; i < 14; i++) {   // bunga kuning bertengah jingga di permukaan semak
+          const a = i * 2.39 + v * 6, up = 0.25 + (i % 4) * 0.12, rr = 0.42 - (up - 0.25) * 0.55;
+          G.add(part(SPH(), '#ffd84a', Math.cos(a) * rr, up + 0.1, Math.sin(a) * rr, 0.13, 0.07, 0.13));
+          G.add(part(SPH(), '#d06a1c', Math.cos(a) * (rr + 0.01), up + 0.13, Math.sin(a) * (rr + 0.01), 0.04, 0.03, 0.04));
+        }
         break;
+      }
+      case 'jalantunggul': {   // tanah berpasir + potongan tunggul kayu untuk dipijak
+        G.add(part(CYL(), '#d9b27a', 0, 0.012, 0, 0.98, 0.02, 0.9));
+        for (const [x, z, s2] of [[-0.24, -0.24, 1], [0.2, -0.26, 0.85], [-0.02, 0.02, 1.15], [-0.28, 0.24, 0.9], [0.26, 0.2, 1]]) {
+          const h = 0.07 + h2(tx, ty, Math.round(x * 20 + z * 7)) * 0.04;
+          G.add(part(CYL(), '#8a5a35', x, h / 2, z, 0.2 * s2, h, 0.2 * s2));
+          G.add(part(CYL(), '#e3b57e', x, h + 0.004, z, 0.18 * s2, 0.012, 0.18 * s2));
+          G.add(part(CYL(), '#b9834f', x, h + 0.011, z, 0.08 * s2, 0.006, 0.08 * s2));
+        }
+        G.rotation.y = Math.floor(v * 4) * Math.PI / 2;
+        break;
+      }
+      case 'kayukering': {   // batang kayu tumbang berlubang: lumut, dahan patah, jamur merah
+        const log = tilt(part(CYL(), '#7a5232', 0, 0.2, 0, 0.36, 0.95, 0.36), 0, Math.PI / 2); G.add(log);
+        const cap = tilt(part(CYL(), '#d9b07a', 0.48, 0.2, 0, 0.34, 0.02, 0.34), 0, Math.PI / 2); G.add(cap);
+        G.add(tilt(part(CYL(), '#3a2412', 0.49, 0.2, 0, 0.2, 0.02, 0.2), 0, Math.PI / 2));
+        G.add(tilt(part(CYL(), '#5e3b20', -0.48, 0.2, 0, 0.3, 0.02, 0.3), 0, Math.PI / 2));
+        for (const [x, s2] of [[-0.15, 0.36], [0.22, 0.24]]) G.add(part(SPH(), '#6fa03a', x, 0.36, 0.02, s2, 0.08, 0.26));
+        G.add(tilt(part(CYL(), '#5e3b20', -0.05, 0.42, -0.06, 0.07, 0.3, 0.07), 0.3, 0.35));
+        for (const [x, z, k] of [[0.3, 0.3, 1], [0.42, 0.22, 0.75]]) {
+          G.add(part(CYL(), '#e9dfc8', x, 0.06 * k, z, 0.05 * k, 0.12 * k, 0.05 * k));
+          G.add(part(SPH(), '#d9473a', x, 0.13 * k, z, 0.17 * k, 0.09 * k, 0.17 * k));
+        }
+        G.rotation.y = v * 6;
+        break;
+      }
+      case 'sumur': {   // sumur batu: dinding bata, air, tiang kayu, katrol, ember, atap biru
+        G.add(part(geo('wellW', () => new THREE.CylinderGeometry(1, 1, 1, 14, 1, true)), RL ? texMat('plank', '#d8d2c6', 4, 1) : '#d8d2c6', 0, 0.22, 0, 0.36, 0.44, 0.36));
+        G.add(part(CYL(), '#b9b4a8', 0, 0.44, 0, 0.8, 0.05, 0.8));
+        G.add(part(CYL(), '#2f5f73', 0, 0.42, 0, 0.6, 0.05, 0.6));
+        for (const sx of [-1, 1]) G.add(bx('#8a5a35', sx * 0.33, 0.7, 0, 0.06, 0.8, 0.06));
+        G.add(tilt(part(CYL(), '#8a5a35', 0, 0.86, 0, 0.06, 0.72, 0.06), 0, Math.PI / 2));
+        G.add(bx('#2e1c0e', 0.4, 0.86, 0, 0.04, 0.04, 0.04)); G.add(bx('#2e1c0e', 0.42, 0.8, 0, 0.03, 0.12, 0.03));   // engkol
+        G.add(bx('#d9c49a', 0, 0.74, 0, 0.012, 0.22, 0.012));
+        G.add(part(CYL(), '#8a5a35', 0, 0.58, 0, 0.12, 0.1, 0.12));
+        for (const sz of [-1, 1]) G.add(tilt(bx('#4a6e9c', 0, 1.2, sz * 0.21, 0.98, 0.05, 0.56), sz * 0.62, 0));   // atap pelana biru (tanpa geometri baru)
+        G.add(bx('#36547a', 0, 1.37, 0, 1.0, 0.05, 0.08));
+        G.add(part(SPH(), '#e3a93b', 0, 1.42, 0, 0.06, 0.06, 0.06));
+        G.rotation.y = Math.floor(v * 4) * Math.PI / 2;
+        break;
+      }
+      case 'kolam': {   // kolam kecil: tepi rumput, air, teratai, bebatuan, alang-alang
+        G.add(part(CYL(), '#6e8f3e', 0, 0.015, 0, 0.94, 0.03, 0.84));
+        G.add(part(CYL(), '#3c8fa6', 0, 0.035, 0, 0.78, 0.02, 0.68));
+        G.add(part(CYL(), '#7cc9d8', -0.08, 0.042, -0.06, 0.4, 0.008, 0.3));
+        for (const [x, z] of [[0.12, -0.05], [-0.15, 0.12]]) G.add(part(CYL(), '#5fa548', x, 0.05, z, 0.14, 0.01, 0.12));
+        G.add(part(SPH(), '#f7b3c6', 0.12, 0.07, -0.05, 0.07, 0.05, 0.07));
+        for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2 + 0.3, s2 = 0.09 + h2(tx, ty, i) * 0.05;
+          G.add(part(SPH(), i % 2 ? '#b9b6ac' : '#cfccc2', Math.cos(a) * 0.44, 0.04, Math.sin(a) * 0.38, s2 * 1.4, s2 * 0.8, s2)); }
+        for (const [x, z, h] of [[-0.36, -0.3, 0.45], [-0.3, -0.36, 0.38], [-0.42, -0.22, 0.32]]) {
+          G.add(part(CYL(), '#4e7f2a', x, h / 2, z, 0.02, h, 0.02));
+          G.add(part(CYL(), '#7a4d2d', x, h - 0.05, z, 0.045, 0.12, 0.045));
+        }
+        G.rotation.y = Math.floor(v * 4) * Math.PI / 2;
+        break;
+      }
+      case 'sungai': {   // aliran sungai yang menyambung: tepi rumput gelap, air biru, batu & alang-alang
+        const m = pagarMask(tx, ty, 'sungai'), bank = '#5e7f34', water = '#5fb0c4';
+        const seg = (x, z, w, d2, c, y, h) => G.add(part(BOX(), typeof c === 'string' ? mat(c) : c, x, y, z, w, h, d2));
+        G.add(part(CYL(), bank, 0, 0.012, 0, 0.84, 0.024, 0.84)); G.add(part(CYL(), water, 0, 0.03, 0, 0.62, 0.02, 0.62));   // pusat membulat
+        for (const [bit, dx, dz] of [[1, 1, 0], [2, -1, 0], [4, 0, 1], [8, 0, -1]]) if (m & bit) {
+          seg(dx * 0.3, dz * 0.3, dx ? 0.42 : 0.82, dz ? 0.42 : 0.82, bank, 0.012, 0.024);
+          seg(dx * 0.3, dz * 0.3, dx ? 0.42 : 0.6, dz ? 0.42 : 0.6, water, 0.03, 0.02);
+        }
+        G.add(part(CYL(), '#bde9f1', (v - 0.5) * 0.2, 0.042, 0.05, 0.16, 0.004, 0.05));
+        const rk = h2(tx, ty, 13);
+        if (rk < 0.6) G.add(part(SPH(), rk < 0.3 ? '#b9b6ac' : '#cfccc2', 0.36 * (v > 0.5 ? 1 : -1), 0.04, -0.34, 0.16, 0.08, 0.12));
+        if (rk > 0.55) G.add(part(CYL(), '#5fa548', -0.08, 0.044, 0.1, 0.13, 0.01, 0.11));
+        if (rk > 0.75) for (const [x, h] of [[0.38, 0.36], [0.42, 0.3]]) { G.add(part(CYL(), '#4e7f2a', x, h / 2, 0.38, 0.02, h, 0.02)); G.add(part(CYL(), '#7a4d2d', x, h - 0.05, 0.38, 0.04, 0.1, 0.04)); }
+        break;
+      }
       case 'bangku':
         G.add(bx('#9a6a3c', 0, 0.3, 0, 0.8, 0.06, 0.32));
         G.add(bx('#9a6a3c', 0, 0.52, -0.14, 0.8, 0.22, 0.05));
@@ -238,8 +360,8 @@
     return G;
   }
   // bit tetangga pagar: 1 kanan, 2 kiri, 4 bawah, 8 atas
-  function pagarMask(tx, ty) {
-    const is = (x, y) => { const d = decoAt(x, y); return d && d.kind === 'pagar'; };
+  function pagarMask(tx, ty, kind = 'pagar') {
+    const is = (x, y) => { const d = decoAt(x, y); return d && d.kind === kind; };
     return (is(tx + 1, ty) ? 1 : 0) | (is(tx - 1, ty) ? 2 : 0) | (is(tx, ty + 1) ? 4 : 0) | (is(tx, ty - 1) ? 8 : 0);
   }
   const troughFull = (tx, ty) => { const st = troughAt(tx, ty); return !!st && st.food > 0; };
@@ -324,7 +446,7 @@
     let sig = o && o !== 'bld' && !(RL && o === 'tree') ? o : '';
     if (o === 'fruit') { const t = S.orchard[tx + ',' + ty]; if (t) sig += t.type + Math.min(t.days, FRUITS[t.type].grow) + (t.fruit ? 'F' : ''); }
     if (o === 'feed' || o === 'hay') sig += troughFull(tx, ty) ? 1 : 0;
-    if (o === 'deco' || o === 'flower') { const d = decoAt(tx, ty); if (d) sig += d.kind + (d.kind === 'pagar' ? pagarMask(tx, ty) : ''); }
+    if (o === 'deco' || o === 'flower') { const d = decoAt(tx, ty); if (d) sig += d.kind + (['pagar', 'pagarputih', 'pagarhidup', 'sungai'].includes(d.kind) ? pagarMask(tx, ty, d.kind) : ''); }
     if (RL && s) sig += '#s' + (s.watered ? 2 : 1);   // Realistis & Kartun: bedeng berupa gundukan 3D
     if (s && s.crop) sig += '|' + s.crop.type + cropStage(s.crop);
     return sig;
@@ -360,7 +482,7 @@
   }
   // pagar kayu: tiang tiap ±0,5 petak + dua palang; satu mesh gabungan (statis)
   function buildFences() {
-    const parts = [], post = '#7a5534', rail = '#9a7450';
+    const parts = [], post = RL && RL.ceria ? '#6e4a2c' : '#7a5534', rail = RL && RL.ceria ? '#8f6640' : '#9a7450';
     for (const [a, b, c, d] of allFences()) {
       const len = Math.hypot(c - a, d - b), n = Math.max(1, Math.round(len * 2)), ang = Math.atan2(d - b, c - a);
       for (let i = 0; i <= n; i++) {
@@ -415,7 +537,145 @@
     G.add(part(BOX(), m, x, y, z + 0.015, 0.4, 0.32, 0.04));
     G.add(bx('#5d3a1a', x, y, z + 0.03, 0.04, 0.32, 0.03));
   }
+  // atap bertingkat (gambrel) khas lumbung: penampang 5 titik diekstrusi sepanjang kedalaman
+  function gambrel(w, d, h1, h2, c) {
+    const sh = new THREE.Shape();
+    sh.moveTo(-w / 2, 0); sh.lineTo(w / 2, 0); sh.lineTo(w * 0.34, h1); sh.lineTo(0, h1 + h2); sh.lineTo(-w * 0.34, h1); sh.closePath();
+    const g = new THREE.ExtrudeGeometry(sh, {depth: d, bevelEnabled: false}); g.translate(0, 0, -d / 2);
+    const m = new THREE.Mesh(g, RL ? texMat('shingle', c, 1, 1) : mat(c)); m.castShadow = m.receiveShadow = true;
+    return m;
+  }
+  // penampang (z, y) diekstrusi sepanjang sumbu x, berpusat di x = 0 (atap & ujung atap lumbung)
+  function extrudeX(pts, len, c) {
+    const sh = new THREE.Shape(); sh.moveTo(pts[0][0], pts[0][1]); for (const p of pts.slice(1)) sh.lineTo(p[0], p[1]); sh.closePath();
+    const g = new THREE.ExtrudeGeometry(sh, {depth: len, bevelEnabled: false}); g.rotateY(-Math.PI / 2); g.translate(len / 2, 0, 0);
+    const m = new THREE.Mesh(g, typeof c === 'string' ? mat(c) : c); m.castShadow = m.receiveShadow = true;
+    return m;
+  }
+  // jendela berdaun jendela (gaya rumah pertanian)
+  function shutterWindow(G, x, y, z, shutter) {
+    windowAt(G, x, y, z);
+    for (const sx of [-1, 1]) G.add(bx(shutter, x + sx * 0.34, y, z + 0.01, 0.16, 0.46, 0.04));
+    G.add(bx('#fbf8f2', x, y - 0.26, z + 0.04, 0.6, 0.06, 0.1));   // ambang putih
+  }
+  // gaya ceria: bangunan ala game bertani kasual (rumah 2 lantai beranda, lumbung merah atap gambrel, kandang, kios bertenda)
+  function buildBuildingCeria(b) {
+    const G = new THREE.Group();
+    const W = b.w - 0.1, D = b.h - 0.1, front = D / 2 + 0.02, doorX = b.door[0] + 0.5 - (b.x + b.w / 2);
+    const plank = (c, rx) => RL ? texMat('plank', c, rx, 1) : c;
+    if (b.id === 'rumah') {
+      const H1 = 1.05, H2 = 0.95, wall = '#f6ecd6', beam = '#6b4a32', roofC = '#5b3c3f';
+      G.add(bx('#9a958c', 0, 0.07, 0, W + 0.1, 0.14, D + 0.1));                      // fondasi batu
+      G.add(bx(plank(wall, 4), 0, H1 / 2 + 0.1, 0, W, H1, D));                        // lantai 1
+      G.add(bx(plank(wall, 4), 0, H1 + 0.1 + H2 / 2, -0.1, W - 0.4, H2, D - 0.5));     // lantai 2 (sedikit mundur)
+      G.add(bx(beam, 0, H1 + 0.1, front - 0.02, W + 0.04, 0.1, 0.06));               // balok antarlantai
+      for (const sx of [-1, 1]) for (const yy of [[H1 / 2 + 0.1, H1], [H1 + 0.1 + H2 / 2, H2]])
+        G.add(bx(beam, sx * ((yy[1] === H1 ? W : W - 0.4) / 2 - 0.05), yy[0], (yy[1] === H1 ? front : front - 0.25) - 0.02, 0.1, yy[1], 0.06));
+      const roof = prism(W + 0.1, D, 1.15, roofC); roof.position.set(0, H1 + 0.1 + H2, -0.1); G.add(roof);
+      G.add(bx(roofC, 0, H1 + 0.1 + H2 - 0.02, -0.1, W + 0.25, 0.06, D - 0.2));       // tepi atap
+      // beranda depan: lantai kayu, tiang putih, atap kecil
+      G.add(bx('#c79a62', doorX, 0.16, front + 0.35, 1.9, 0.08, 0.7));
+      for (const sx of [-0.85, 0.85]) G.add(bx('#fbf8f2', doorX + sx, 0.62, front + 0.62, 0.1, 0.9, 0.1));
+      G.add(tilt(bx(roofC, doorX, 1.12, front + 0.42, 2.1, 0.07, 0.85), 0.28, 0));
+      for (let i = 0; i < 7; i++) G.add(bx('#fbf8f2', doorX - 0.75 + i * 0.25, 0.32, front + 0.68, 0.05, 0.26, 0.04));   // pagar beranda
+      G.add(bx('#2f4f7a', doorX, 0.55, front + 0.01, 0.5, 0.8, 0.05));                // pintu biru tua
+      G.add(bx('#f6c343', doorX + 0.17, 0.55, front + 0.05, 0.05, 0.05, 0.03));
+      for (const x of [-1.55, 1.55]) shutterWindow(G, x, 0.68, front, '#3e5163');
+      for (const x of [-1.0, 0, 1.0]) shutterWindow(G, x, H1 + 0.6, front - 0.23, '#3e5163');
+      G.add(bx('#b8664a', 1.5, H1 + H2 + 0.9, -0.5, 0.36, 1.0, 0.36));                // cerobong bata
+      G.add(bx('#7d7a72', 1.5, H1 + H2 + 1.42, -0.5, 0.44, 0.08, 0.44));
+      for (const x of [-0.6, 0.6]) G.add(part(SPH(), '#f2a23a', doorX + x * 1.6, 0.25, front + 0.85, 0.3, 0.26, 0.3));   // pot bunga
+    } else if (b.id === 'lumbung') {   // aset desain "Lumbung" + "Silo": dinding merah berbingkai krem, atap gambrel toska, silo krem berkubah merah
+      const H = 1.45, red = '#d9472f', redDk = '#b5321f', cream = '#fff3de', teal = '#6fd3cb', tealDk = '#4fb8b1', ink = '#2b3a4a';
+      const bx0 = -W / 2 + 1.05, bx1 = W / 2, BW = bx1 - bx0, cx = (bx0 + bx1) / 2;   // badan lumbung; petak paling kiri untuk silo
+      G.add(bx('#9a958c', cx, 0.06, 0, BW + 0.1, 0.12, D + 0.1));
+      G.add(bx(plank(red, Math.round(BW * 1.6)), cx, H / 2 + 0.08, 0, BW, H, D));
+      // ujung atap (gable) bertingkat di kiri & kanan, warna merah tua
+      const k1 = 0.85, k2 = 0.42, kw = D * 0.33;
+      const gable = extrudeX([[-D / 2, 0], [D / 2, 0], [kw, k1], [0, k1 + k2], [-kw, k1]], BW - 0.02, plank(redDk, 3));
+      gable.position.set(cx, H + 0.08, 0); G.add(gable);
+      // atap: bagian bawah curam toska tua, bagian atas landai toska; lis krem di tepi, bubungan gelap
+      const ov = 0.22, RD = D + 0.5, rk = RD * 0.33;
+      const low = extrudeX([[-RD / 2, -0.06], [RD / 2, -0.06], [rk, k1 + 0.04], [-rk, k1 + 0.04]], BW + ov * 2, RL ? texMat('shingle', tealDk, 1, 1) : tealDk);
+      low.position.set(cx, H + 0.08, 0); G.add(low);
+      const upr = extrudeX([[-rk - 0.04, k1], [rk + 0.04, k1], [0, k1 + k2 + 0.08]], BW + ov * 2, RL ? texMat('shingle', teal, 1, 1) : teal);
+      upr.position.set(cx, H + 0.08, 0); G.add(upr);
+      for (const sz of [-1, 1]) G.add(bx(cream, cx, H + 0.03, sz * (RD / 2 - 0.02), BW + ov * 2, 0.06, 0.07));   // lis krem talang
+      G.add(bx('#1f5f5c', cx, H + 0.08 + k1 + k2 + 0.07, 0, BW + ov * 2 + 0.02, 0.07, 0.1));                      // bubungan
+      // bingkai krem dinding depan & sudut
+      G.add(bx(cream, cx, H + 0.06, front - 0.01, BW + 0.02, 0.08, 0.05));
+      G.add(bx(cream, cx, 0.16, front - 0.01, BW + 0.02, 0.07, 0.05));
+      for (const x of [bx0, bx1]) for (const sz of [-1, 1]) G.add(bx(cream, x - Math.sign(x - cx) * 0.03, H / 2 + 0.08, sz * (D / 2 - 0.03), 0.08, H, 0.08));
+      // pintu ganda merah tua: bingkai krem, silang X & palang tengah
+      G.add(bx(cream, doorX, 0.6, front + 0.01, 1.2, 1.08, 0.04)); G.add(bx('#7e2316', doorX, 0.6, front + 0.03, 1.06, 0.96, 0.04));
+      for (const a of [0.78, -0.78]) G.add(tilt(bx(cream, doorX, 0.6, front + 0.06, 0.07, 1.36, 0.02), 0, a));
+      G.add(bx(cream, doorX, 0.6, front + 0.06, 0.06, 0.96, 0.02));
+      // jendela gelap berbingkai krem di kiri & kanan pintu
+      for (const x of [doorX - 1.05, doorX + 1.2]) { G.add(bx(cream, x, 0.78, front + 0.01, 0.52, 0.42, 0.04)); G.add(bx(ink, x, 0.78, front + 0.03, 0.4, 0.3, 0.04)); }
+      // sisi kanan (gable yang menghadap kamera): pintu loteng ber-X, jendela atas ber-X, lubang angin bulat
+      const sx = bx1 + 0.01;
+      G.add(bx(cream, sx, 0.6, 0, 0.04, 1.05, 0.8)); G.add(bx('#7e2316', sx + 0.02, 0.6, 0, 0.04, 0.93, 0.68));
+      for (const a of [0.66, -0.66]) G.add(tilt(bx(cream, sx + 0.04, 0.6, 0, 0.02, 1.15, 0.06), a, 0));
+      G.add(bx(cream, sx, H + 0.5, 0, 0.04, 0.62, 0.6)); G.add(bx(ink, sx + 0.02, H + 0.5, 0, 0.04, 0.5, 0.48));
+      for (const a of [0.78, -0.78]) G.add(tilt(bx(cream, sx + 0.04, H + 0.5, 0, 0.02, 0.66, 0.05), a, 0));
+      G.add(tilt(part(CYL(), cream, sx + 0.02, H + 1.05, 0, 0.26, 0.04, 0.26), 0, Math.PI / 2));
+      G.add(tilt(part(CYL(), ink, sx + 0.04, H + 1.05, 0, 0.17, 0.04, 0.17), 0, Math.PI / 2));
+      // baling-baling angin emas di bubungan
+      const vy = H + 0.08 + k1 + k2 + 0.1, gold = '#e3a93b';
+      G.add(bx('#3e2a1a', cx, vy + 0.35, 0, 0.04, 0.7, 0.04));
+      G.add(bx('#3e2a1a', cx, vy + 0.55, 0, 0.6, 0.04, 0.04));
+      G.add(tilt(part(CONE(), gold, cx + 0.34, vy + 0.55, 0, 0.12, 0.16, 0.06), 0, -Math.PI / 2));
+      G.add(bx(gold, cx - 0.3, vy + 0.55, 0, 0.1, 0.16, 0.03));
+      G.add(part(SPH(), gold, cx, vy + 0.72, 0, 0.1, 0.1, 0.1));
+      // tumpukan jerami di sudut depan kanan
+      for (const [x, y, z, c] of [[bx1 - 0.25, 0.14, front + 0.22, '#d9b03e'], [bx1 - 0.62, 0.14, front + 0.22, '#d9b03e'], [bx1 - 0.43, 0.38, front + 0.2, '#f2cf5b']]) {
+        G.add(bx(c, x, y, z, 0.34, 0.24, 0.26)); G.add(bx('#a9802a', x, y, z + 0.005, 0.36, 0.03, 0.27));
+      }
+      // silo: badan krem bergaris, dua cincin, kubah merah, kubah kecil di puncak, pintu lengkung, tangga
+      const so = -W / 2 + 0.5, sz0 = -0.15, SR = 0.46, SH = 2.5;
+      G.add(part(geo('siloB', () => new THREE.CylinderGeometry(1, 1, 1, 20)), RL ? texMat('plank', '#efe6d2', 6, 1) : '#efe6d2', so, SH / 2, sz0, SR, SH, SR));
+      for (const y of [0.85, 1.7]) G.add(part(geo('siloR', () => new THREE.CylinderGeometry(1, 1, 1, 20)), '#9e8e70', so, y, sz0, SR + 0.02, 0.06, SR + 0.02));
+      G.add(part(geo('siloD', () => new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2)), '#d63e2e', so, SH, sz0, SR + 0.04, 0.62, SR + 0.04));
+      G.add(part(geo('siloR', () => new THREE.CylinderGeometry(1, 1, 1, 20)), '#8e2219', so, SH + 0.01, sz0, SR + 0.05, 0.05, SR + 0.05));
+      G.add(part(CYL(), '#c7372a', so, SH + 0.68, sz0, 0.18, 0.18, 0.18));
+      G.add(part(geo('siloC', () => new THREE.ConeGeometry(1, 1, 12)), '#8e2219', so, SH + 0.86, sz0, 0.17, 0.18, 0.17));
+      const da = -0.5, door = new THREE.Group();   // pintu lengkung di depan-kiri silo
+      door.position.set(so + Math.sin(da) * (SR - 0.01), 0, sz0 + Math.cos(da) * (SR - 0.01)); door.rotation.y = da;
+      door.add(bx('#7e2316', 0, 0.32, 0, 0.32, 0.56, 0.06));
+      door.add(tilt(part(CYL(), '#7e2316', 0, 0.6, 0, 0.32, 0.06, 0.32), Math.PI / 2, 0));
+      door.add(part(SPH(), gold, 0.09, 0.34, 0.04, 0.05, 0.05, 0.05));
+      G.add(door);
+      const la = 0.45, lx = so + Math.sin(la) * (SR + 0.04), lz = sz0 + Math.cos(la) * (SR + 0.04);   // tangga menghadap kamera
+      const lad = new THREE.Group(); lad.position.set(lx, 0, lz); lad.rotation.y = la;
+      for (const s2 of [-0.1, 0.1]) lad.add(bx('#6b5a44', s2, SH / 2 + 0.1, 0, 0.04, SH + 0.2, 0.04));
+      for (let y = 0.3; y < SH; y += 0.22) lad.add(bx('#6b5a44', 0, y, 0, 0.22, 0.03, 0.03));
+      G.add(lad);
+    } else if (b.id === 'kandang') {
+      const H = 1.0, wood = '#c1673a', white = '#fbf8f2';
+      G.add(bx(plank(wood, Math.round(W * 1.5)), 0, H / 2 + 0.12, 0, W, H, D));
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) G.add(bx('#7a4a2a', sx * (W / 2 - 0.1), 0.06, sz * (D / 2 - 0.1), 0.14, 0.14, 0.14));   // kaki panggung
+      for (const sx of [-1, 1]) G.add(bx(white, sx * (W / 2 - 0.04), H / 2 + 0.12, front - 0.02, 0.1, H, 0.06));
+      const roof = prism(W + 0.35, D + 0.45, 0.85, '#8f2e25'); roof.position.y = H + 0.12; G.add(roof);
+      G.add(bx('#7a3a20', doorX, 0.5, front + 0.01, 0.42, 0.62, 0.05));
+      G.add(tilt(bx('#a87a4a', doorX, 0.12, front + 0.35, 0.36, 0.04, 0.75), 0.32, 0));   // tangga ayam
+      for (const x of [-1.0, 1.0]) { G.add(part(CYL(), white, x, 0.75, front + 0.01, 0.42, 0.04, 0.42)); G.add(tilt(part(CYL(), '#3a2a20', x, 0.75, front + 0.025, 0.3, 0.03, 0.3), Math.PI / 2, 0)); }
+    } else {   // toko: kios pasar bertenda bergaris
+      const H = 1.2;
+      G.add(bx(plank('#d9a066', Math.round(W * 1.5)), 0, H / 2, 0, W, H, D));
+      const roof = prism(W + 0.3, D + 0.4, 0.8, '#3f8f4a'); roof.position.y = H; G.add(roof);
+      for (let i = 0; i < 10; i++) G.add(tilt(bx(i % 2 ? '#fff4e6' : '#e0453b', -W / 2 + 0.25 + i * (W - 0.5) / 9, H - 0.02, front + 0.3, (W - 0.5) / 9, 0.06, 0.65), 0.38, 0));
+      G.add(bx('#8a5a32', 0, 0.45, front + 0.25, W - 0.6, 0.12, 0.45));                // meja dagang
+      for (const [x, c] of [[-1.4, '#e8432f'], [-0.6, '#f7cf3c'], [0.3, '#7cc84a'], [1.1, '#f08a24']]) G.add(part(SPH(), c, x, 0.6, front + 0.25, 0.32, 0.2, 0.3));
+      G.add(bx('#2f4f7a', doorX, 0.5, front + 0.01, 0.5, 0.8, 0.05));
+      G.add(bx('#7a4a24', 0, H + 0.95, D / 2 - 0.2, 1.3, 0.45, 0.08));
+      G.add(tilt(part(CYL(), '#f6c343', 0, H + 0.95, D / 2 - 0.14, 0.28, 0.04, 0.28), Math.PI / 2, 0));
+      windowAt(G, -1.5, 0.85, front); windowAt(G, 1.5, 0.85, front);
+    }
+    G.position.set(b.x + b.w / 2, 0, b.y + b.h / 2);
+    return G;
+  }
   function buildBuilding(b) {
+    if (RL && RL.ceria) return buildBuildingCeria(b);
     const G = new THREE.Group();
     const W = b.w - 0.1, D = b.h - 0.1, H = 1.35;
     const front = D / 2 + 0.02, doorX = b.door[0] + 0.5 - (b.x + b.w / 2);
@@ -969,6 +1229,7 @@
       applyQuality();
       if (treeGroup) { scene.remove(treeGroup); treeGroup.userData.dispose(); }
       treeGroup = RL.makeTrees(); scene.add(treeGroup);
+      rebuildFlowers();
     }
     if (RL && R.groundTiles && R.groundTiles.length) {   // pemain mengecat tanah: gambar ulang petak itu saja (ringan)
       ground3.repaintGround(R.groundTiles); R.groundTiles.length = 0; R.grassAt = now;
@@ -978,6 +1239,7 @@
       if (grassMesh) { scene.remove(grassMesh); grassMesh.dispose(); }
       grassMesh = RL.makeGrass(renderer.userData.lite); scene.add(grassMesh);
       applyQuality();
+      rebuildFlowers();
     }
     if (RL) {
       // gambar ulang hanya petak yang berubah (dicangkul, disiram, diratakan)
@@ -1101,7 +1363,8 @@
       const iso = TOON && !near ? 1.55 : 1;
       const zm = R.noChar ? R.zoom : 1;
       if (!RL) { scene.fog.near = 20 * zm; scene.fog.far = 42 * zm; }   // zoom jauh tidak tertutup kabut
-      want.set(tx, (near ? 4.2 : 9.5) * far * iso * zm, tz + (near ? 5 : 9) * far * iso * zm);
+      const yaw = camYaw(), dist = (near ? 5 : 9) * far * iso * zm;   // ceria: kamera miring 45° seperti game bertani isometrik
+      want.set(tx + Math.sin(yaw) * dist, (near ? 4.2 : 9.5) * far * iso * zm, tz + Math.cos(yaw) * dist);
       look.set(tx, near ? 0.7 : 0.4, tz + 0.3);
     }
     const fovWant = baseFov * (TOON && mode === 'atas' ? 0.66 : 1);
@@ -1151,18 +1414,20 @@
     const {dir, elev} = RL.sunFromTime(S.time);
     const day = smoothstep(-4, 8, elev), warm = smoothstep(0, 22, elev);
     const fogC = scene.fog.color;
-    C1.set(wet ? '#a9b8c6' : '#ffb27a').lerp(C2.set(wet ? '#b9c6d2' : '#8fd8ff'), warm);
+    C1.set(wet ? '#a9b8c6' : '#ffb27a').lerp(C2.set(wet ? '#b9c6d2' : RL.ceria ? '#9fdcff' : '#8fd8ff'), warm);
     fogC.set('#1d2a55').lerp(C1, day);   // r128: warna kabut & latar dipakai apa adanya (sRGB) → sama persis
-    scene.fog.near = 40; scene.fog.far = 95;
+    scene.fog.near = RL.ceria ? 90 : 40; scene.fog.far = RL.ceria ? 200 : 95;   // ceria: kamera 45° lebih jauh → kabut tidak menutupi ladang
     bgColor.copy(fogC); scene.background = bgColor;
-    sun.intensity = (wet ? 0.4 : 0.85) * day;
+    sun.intensity = (wet ? 0.4 : RL.ceria ? 0.95 : 0.85) * day;
     sun.color.set('#ffc890').convertSRGBToLinear().lerp(C2.set('#fff6e8').convertSRGBToLinear(), warm);
     hemi.color.set('#ffffff').convertSRGBToLinear(); hemi.groundColor.set('#8cc860').convertSRGBToLinear();
-    hemi.intensity = 0.25 + 0.4 * day;
+    hemi.intensity = RL.ceria ? 0.18 + 0.32 * day : 0.25 + 0.4 * day;
+    if (RL.ceria) { hemi.color.set('#e8f4ff').convertSRGBToLinear(); hemi.groundColor.set('#7a9a4a').convertSRGBToLinear(); }
     if (dir.y < 0.05) dir.y = 0.05;
     sun.position.set(px + dir.x * 20, dir.y * 20, pz + dir.z * 20);
     sun.target.position.set(px, 0, pz);
   }
+  const camYaw = () => RL && RL.ceria && CAMS[camMode].id === 'atas' ? Math.PI / 4 : 0;   // ceria: kamera miring 45°
   function smoothstep(a, b, x) { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }
 
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), ground0 = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit = new THREE.Vector3();
@@ -1264,5 +1529,5 @@
   onGame('tool', id => { if (id === 'palu' || id === 'kapak' || id === 'cangkul') shake = id === 'cangkul' ? 0.12 : 0.22; });
   onGame('chop', () => { shake = 0.35; });
 
-  Renderers['3d'] = {init, resize, update, draw, cycleCamera, pickWorld, toolIcon, pxPerTile: () => pxPerUnit, setQuality, qualityInfo, get debug() { return {scene, camera, renderer, playerRig, rigs, eggMeshes, tiles}; }};
+  Renderers['3d'] = {init, resize, update, draw, cycleCamera, pickWorld, toolIcon, pxPerTile: () => pxPerUnit, setQuality, qualityInfo, yaw: () => camYaw(), get debug() { return {scene, camera, renderer, playerRig, rigs, eggMeshes, tiles}; }};
 })();

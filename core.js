@@ -60,7 +60,20 @@ const BUILD = {
             yard: {x0: -1, x1: 6, y0: 4, y1: 7}, gate: 'top', area: {l: 6, r: 6, t: 10, b: 6}},
   lumbung: {name: 'Lumbung', icon: '🐄', price: 3000, w: 5, h: 3, door: 2, cap: 6, feed: 'jerami', troughObj: 'hay', trough: [5, 3],
             yard: {x0: -1, x1: 5, y0: 3, y1: 6}, gate: 'right', area: {l: 14, r: 14, t: 18, b: 8}},
+  rumah:   {name: 'Rumah', icon: '🏡', price: 0, w: 5, h: 3, door: 2, fixed: true},   // tidak dijual/dibeli, hanya dipindah
+  toko:    {name: 'Toko',  icon: '🛒', price: 0, w: 5, h: 3, door: 2, fixed: true},
   pagar:   {name: 'Pagar Kayu',   icon: '🪵', price: 15,  w: 1, h: 1, deco: true, solid: true},
+  pagarputih: {name: 'Pagar Putih', icon: '🤍', price: 20, w: 1, h: 1, deco: true, solid: true},
+  pagarhidup: {name: 'Pagar Tanaman', icon: '🌿', price: 20, w: 1, h: 1, deco: true, solid: true},
+  jalanbatu:  {name: 'Jalan Batu', icon: '🪨', price: 8, w: 1, h: 1, deco: true, solid: false},
+  pohonek:    {name: 'Pohon Ek', icon: '🌳', price: 60, w: 1, h: 1, deco: true, solid: true},
+  cemara:     {name: 'Cemara', icon: '🌲', price: 50, w: 1, h: 1, deco: true, solid: true},
+  orangan:    {name: 'Orang-orangan Sawah', icon: '🧑‍🌾', price: 80, w: 1, h: 1, deco: true, solid: true},
+  kayukering: {name: 'Kayu Kering', icon: '🍄', price: 45, w: 1, h: 1, deco: true, solid: true},
+  sumur:      {name: 'Sumur', icon: '🪣', price: 250, w: 1, h: 1, deco: true, solid: true},
+  kolam:      {name: 'Kolam Kecil', icon: '🪷', price: 150, w: 1, h: 1, deco: true, solid: true},
+  jalantunggul: {name: 'Jalan Tunggul', icon: '🟤', price: 10, w: 1, h: 1, deco: true, solid: false},
+  sungai:     {name: 'Sungai Kecil', icon: '🏞️', price: 25, w: 1, h: 1, deco: true, solid: true},
   bunga:   {name: 'Petak Bunga',  icon: '🌷', price: 30,  w: 1, h: 1, deco: true, solid: false},
   semak:   {name: 'Semak',        icon: '🌳', price: 40,  w: 1, h: 1, deco: true, solid: true},
   bangku:  {name: 'Bangku Taman', icon: '🪑', price: 90,  w: 1, h: 1, deco: true, solid: true},
@@ -84,9 +97,21 @@ const FRUITS = {
 };
 const FRUIT_YIELD = 3;
 // kandang & lumbung awal (bisa dipindah lewat mode bangun)
-const STARTER_STRUCTS = [{id: 's1', kind: 'kandang', x: 3, y: 15, food: 0}, {id: 's2', kind: 'lumbung', x: 2, y: 7, food: 0}];
+const STARTER_STRUCTS = [{id: 's1', kind: 'kandang', x: 3, y: 15, food: 0}, {id: 's2', kind: 'lumbung', x: 2, y: 7, food: 0},
+  {id: 's3', kind: 'rumah', x: 3, y: 2, food: 0}, {id: 's4', kind: 'toko', x: 23, y: 15, food: 0}];
 const HAY = [7, 10], FEED = [9, 19];   // posisi tempat makan awal (dipakai migrasi simpanan lama)
-const START = {x: 5 * T + 8, y: 5 * T + 10};
+const START = {x: 5 * T + 8, y: 5 * T + 10};   // depan pintu rumah di peta awal
+// depan pintu rumah sekarang (rumah bisa dipindah lewat mode bangun)
+function homeSpot() {
+  const h = S && S.structures && S.structures.find(st => st.kind === 'rumah');
+  if (!h) return START;
+  const tx = h.x + BUILD.rumah.door, ty = h.y + BUILD.rumah.h;
+  for (const [dx, dy] of [[0, 0], [-1, 0], [1, 0], [0, 1], [-2, 0], [2, 0], [-1, 1], [1, 1], [0, 2]]) {   // depan pintu tertutup → petak kosong terdekat
+    const x = (tx + dx) * T + 8, y = (ty + dy) * T + 10;
+    if (inMap(tx + dx, ty + dy) && (typeof blocked !== 'function' || !blocked(x, y))) return {x, y};
+  }
+  return {x: tx * T + 8, y: ty * T + 10};
+}
 const SOLID = new Set(['tree', 'rock', 'stump', 'bld', 'bin', 'feed', 'hay', 'sign', 'fruit', 'forsale', 'deco']);   // 'flower' = dekorasi yang bisa dilewati
 const DIRV = {up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0]};
 
@@ -175,7 +200,7 @@ function newGame() {
     obj[y][x] = v < 0.22 ? 'weed' : v < 0.30 ? 'rock' : v < 0.35 ? 'stump' : null;
   }
   return {
-    v: 5, ground, obj, soil, structures, nextSid: 3,
+    v: 5, ground, obj, soil, structures, nextSid: 5,
     day: 1, season: 0, year: 1, time: DAY_START,
     gold: 300, stamina: MAX_STAMINA, water: CAN_MAX,
     tool: 0, seedSel: 'lobak',
@@ -269,6 +294,8 @@ function migrate(d) {
     if (!Array.isArray(d.staff)) d.staff = [];
     if (!Array.isArray(d.applicants)) d.applicants = [];
     if (!Array.isArray(d.shift)) d.shift = [];
+    if (Array.isArray(d.structures) && isNum(d.nextSid)) for (const b of FIXED_BUILDINGS)   // rumah & toko jadi bangunan yang bisa dipindah
+      if (!d.structures.some(st => st && st.kind === b.kind)) d.structures.push({id: 's' + d.nextSid++, kind: b.kind, x: b.x, y: b.y, food: 0});
     for (const a of d.animals || []) if (a && a.type === 'babi' && a.ready) { a.ready = false; a.grow = (a.grow || 0) + 1; }
     if (!d.ledger) d.ledger = {days: [], total: {in: 0, out: 0}};
     if (!d.market || typeof d.market !== 'object') d.market = {};
@@ -307,7 +334,7 @@ function validSave(d) {
   if (!Array.isArray(d.animals) || !d.animals.every(a => a && isNum(a.id) && Object.hasOwn(ANIMALS, a.type) && isNum(a.x) && isNum(a.y) &&
     isNum(a.hearts) && a.hearts >= 0 && a.hearts <= 10 && typeof a.name === 'string' && /^[\w ]{1,19}$/.test(a.name))) return false;
   if (!Array.isArray(d.structures) || !d.structures.every(st => st && typeof st.id === 'string' && /^s\d+$/.test(st.id) && Object.hasOwn(BUILD, st.kind) &&
-    isNum(st.x) && isNum(st.y) && st.x > 0 && st.y > 0 && st.x < MW && st.y < MH && (BUILD[st.kind].deco || isNum(st.food)))) return false;
+    isNum(st.x) && isNum(st.y) && st.x > 0 && st.y > 0 && st.x < MW && st.y < MH && (BUILD[st.kind].deco || BUILD[st.kind].fixed || isNum(st.food)))) return false;
   if (new Set(d.structures.map(st => st.id)).size !== d.structures.length) return false;
   if (!d.animals.every(a => d.structures.some(st => st.id === a.home && st.kind === ANIMALS[a.type].home))) return false;
   const ids = d.animals.map(a => a.id);
@@ -648,11 +675,13 @@ function fillTrough(st) {
 /* ================= Bangunan yang bisa dipasang/dipindah (mode bangun) ================= */
 const structById = id => S.structures.find(st => st.id === id);
 const residents = st => S.animals.filter(a => a.home === st.id);
-const isHome = st => !BUILD[st.kind].deco;
+const isHome = st => !BUILD[st.kind].deco && !BUILD[st.kind].fixed;   // kandang & lumbung (punya hewan)
+const isBuilding = st => !BUILD[st.kind].deco;                             // semua bangunan, termasuk rumah & toko
 // tapak bangunan (petak): bangunan + halaman berpagar; dekorasi = 1 petak
 function footprint(kind, x, y) {
   const d = BUILD[kind];
   if (d.deco) return {x0: x, y0: y, x1: x, y1: y};
+  if (!d.yard) return {x0: x, y0: y, x1: x + d.w - 1, y1: y + d.h};   // rumah/toko: tapak + baris depan pintu tetap kosong
   return {x0: Math.min(x, x + d.yard.x0), x1: Math.max(x + d.w - 1, x + d.yard.x1), y0: y, y1: y + d.yard.y1};
 }
 const inRect = (r, tx, ty) => tx >= r.x0 && tx <= r.x1 && ty >= r.y0 && ty <= r.y1;
@@ -680,7 +709,7 @@ function structFences(st) {
 function allFences() { return S ? S.structures.filter(isHome).flatMap(structFences) : []; }
 // semua bangunan untuk digambar & pintu: bangunan tetap + kandang/lumbung pemain
 function buildings() {
-  return FIXED_BUILDINGS.concat(S.structures.filter(isHome).map(st => {
+  return (S.structures.some(st => BUILD[st.kind].fixed) ? [] : FIXED_BUILDINGS).concat(S.structures.filter(isBuilding).map(st => {
     const d = BUILD[st.kind];
     return {id: st.id, kind: st.kind, x: st.x, y: st.y, w: d.w, h: d.h, door: [st.x + d.door, st.y + d.h - 1]};
   }));
@@ -699,13 +728,23 @@ function runSprinklers(only) {
   }
   return n;
 }
-const decoAt = (tx, ty) => S.structures.find(st => !isHome(st) && st.x === tx && st.y === ty);
+// peta cepat petak → dekorasi (dipakai renderer tiap frame); disusun ulang bila daftar bangunan berubah
+let decoMap = null, decoKey = '';
+function decoAt(tx, ty) {
+  const list = S.structures, key = (R.worldVer || 0) + ':' + list.length;
+  if (!decoMap || decoMap.list !== list || decoKey !== key) {
+    decoMap = new Map(); decoMap.list = list; decoKey = key;
+    for (const st of list) if (BUILD[st.kind].deco) decoMap.set(st.x + ',' + st.y, st);
+  }
+  const st = decoMap.get(tx + ',' + ty);
+  return st && st.x === tx && st.y === ty ? st : undefined;
+}
 // tulis/hapus isi peta untuk sebuah bangunan
 function writeStructure(obj, st) {
   const d = BUILD[st.kind];
   if (d.deco) { obj[st.y][st.x] = d.solid ? 'deco' : 'flower'; return; }
   for (let y = st.y; y < st.y + d.h; y++) for (let x = st.x; x < st.x + d.w; x++) obj[y][x] = 'bld';
-  const [tx, ty] = troughTile(st); obj[ty][tx] = d.troughObj;
+  if (d.trough) { const [tx, ty] = troughTile(st); obj[ty][tx] = d.troughObj; }
 }
 function clearFootprint(obj, st) {
   const r = footprint(st.kind, st.x, st.y);
@@ -728,7 +767,15 @@ function canPlace(kind, x, y, ignoreId) {
     if (S.soil[ty][tx] || (S.obj[ty][tx] && !mine && !DEBRIS.has(S.obj[ty][tx]))) return false;
     if (S.structures.some(st => st.id !== ignoreId && inRect(footprint(st.kind, st.x, st.y), tx, ty))) return false;
   }
-  if (!R.noChar) { const [px, py] = playerTile(); if (inRect(r, px, py) && !(selfRect && inRect(selfRect, px, py))) return false; }
+  if (!R.noChar) {   // petani tidak boleh tertimpa badan bangunan (halaman lama sendiri masih boleh)
+    const [px, py] = playerTile(), body = d.deco ? r : {x0: x, y0: y, x1: x + d.w - 1, y1: y + d.h - 1};
+    if (inRect(body, px, py) || (inRect(r, px, py) && !(selfRect && inRect(selfRect, px, py)))) return false;
+    if (!d.deco || d.solid) {   // badan petani bisa menyentuh 2 petak: jangan sampai terkurung benda padat
+      const p = S.player;
+      for (let ty = Math.floor((p.y - 4) / T); ty <= Math.floor((p.y + 1) / T); ty++)
+        for (let tx = Math.floor((p.x - 5) / T); tx <= Math.floor((p.x + 4) / T); tx++) if (inRect(body, tx, ty)) return false;
+    }
+  }
   return true;
 }
 function placeNew(kind, x, y) {
@@ -747,9 +794,12 @@ function placeNew(kind, x, y) {
 function moveStruct(id, x, y) {
   const st = structById(id);
   if (!st || !canPlace(st.kind, x, y, id)) return false;
-  const old = footprint(st.kind, st.x, st.y);
-  for (let ty = old.y0; ty <= old.y1; ty++) for (let tx = old.x0; tx <= old.x1; tx++)
-    if (['bld', 'feed', 'hay', 'deco', 'flower'].includes(S.obj[ty][tx])) S.obj[ty][tx] = null;
+  const d = BUILD[st.kind];   // hanya hapus petak milik bangunan ini (dekorasi lain di sekitarnya tetap)
+  if (d.deco) S.obj[st.y][st.x] = null;
+  else {
+    for (let ty = st.y; ty < st.y + d.h; ty++) for (let tx = st.x; tx < st.x + d.w; tx++) if (S.obj[ty][tx] === 'bld') S.obj[ty][tx] = null;
+    if (d.trough) { const [tx, ty] = troughTile(st); if (S.obj[ty][tx] === d.troughObj) S.obj[ty][tx] = null; }
+  }
   st.x = x; st.y = y; clearDebris(st); writeStructure(S.obj, st);
   if (st.kind === 'sprinkler') runSprinklers(st);
   for (const a of residents(st)) { Object.assign(a, spawnIn(st, a.type)); delete R.ai[a.id]; }
@@ -759,7 +809,7 @@ function moveStruct(id, x, y) {
 }
 function sellDeco(id) {
   const st = structById(id);
-  if (!st || isHome(st)) return;
+  if (!st || !BUILD[st.kind].deco) return;
   S.obj[st.y][st.x] = null; S.structures = S.structures.filter(x => x !== st);
   const back = Math.floor(BUILD[st.kind].price / 2); cash(back, 'refund'); emit('coin');
   R.worldVer = (R.worldVer || 0) + 1;
@@ -772,10 +822,20 @@ const TERRAIN = {
   ladang: {name: 'Ladang', icon: '🟫', price: 10, to: 'field', note: 'tanah untuk bedeng'},
   jalan:  {name: 'Jalan', icon: '🪨', price: 5, to: 'path', note: 'untuk lewat & hiasan'},
   rumput: {name: 'Rumput', icon: '🌱', price: 0, to: 'grass', note: 'hapus jalan / ladang kosong'},
+  pagar:  {name: 'Pagar kayu', icon: '🪵', price: 15, fence: 'pagar', note: 'geser untuk membuat pagar panjang'},
+  putih:  {name: 'Pagar putih', icon: '🤍', price: 20, fence: 'pagarputih', note: 'pagar piket putih'},
+  hidup:  {name: 'Pagar tanaman', icon: '🌿', price: 20, fence: 'pagarhidup', note: 'semak berderet'},
+  batu:   {name: 'Jalan batu', icon: '🪨', price: 8, fence: 'jalanbatu', note: 'ubin batu, bisa dilewati'},
+  tunggul: {name: 'Jalan tunggul', icon: '🟤', price: 10, fence: 'jalantunggul', note: 'pijakan tunggul kayu, bisa dilewati'},
+  sungai: {name: 'Sungai kecil', icon: '🏞️', price: 25, fence: 'sungai', note: 'geser untuk membuat aliran sungai'},
+  copot:  {name: 'Hapus', icon: '✂️', price: 0, unfence: true, note: 'copot pagar/jalan/sungai, uang kembali 50%'},
 };
 let paintTimer = null;
+const PAINTABLE = new Set(Object.values(TERRAIN).map(t => t.fence).filter(Boolean));   // dekorasi yang bisa dicat/dicopot dengan geser
 function canPaint(kind, tx, ty) {
   const t = TERRAIN[kind];
+  if (t && t.fence) return canPlace(t.fence, tx, ty);
+  if (t && t.unfence) { const d = inMap(tx, ty) && decoAt(tx, ty); return !!d && PAINTABLE.has(d.kind); }
   if (!t || tx < 1 || ty < 1 || tx > MW - 2 || ty > MH - 2 || tileLocked(tx, ty)) return false;
   const g = S.ground[ty][tx], o = S.obj[ty][tx];
   if (g === 'water' || g === t.to || S.soil[ty][tx] || structAtTile(tx, ty)) return false;
@@ -787,6 +847,15 @@ function paintAt(tx, ty) {
   if (!t || !canPaint(kind, tx, ty)) return;
   if (S.gold < t.price) { if (!R.paintWarned) { R.paintWarned = true; msg('Uangmu tidak cukup.'); } return; }
   if (t.price) cash(-t.price, 'bangun');
+  if (t.fence || t.unfence) {   // pagar: dipasang/dicopot per petak, tiang & palang menyambung sendiri
+    if (t.fence) { const st = {id: 's' + S.nextSid++, kind: t.fence, x: tx, y: ty}; S.structures.push(st); clearDebris(st); writeStructure(S.obj, st); }
+    else { const d = decoAt(tx, ty); S.obj[ty][tx] = null; S.structures = S.structures.filter(x => x !== d); const back = Math.floor(BUILD[d.kind].price / 2); cash(back, 'refund'); R.paintCost = (R.paintCost || 0) - back; }
+    R.paintCount = (R.paintCount || 0) + 1; R.paintCost = (R.paintCost || 0) + t.price;
+    burst(tx, ty, {pagarhidup: '#4f9a3a', jalanbatu: '#b8b2a6', sungai: '#5fb0c4', jalantunggul: '#d9b27a'}[t.fence] || (t.fence ? '#c9a06a' : '#f2e2a0'), 4);
+    R.grassAt = performance.now();   // rumput di bawah pagar disusun ulang setelah selesai
+    clearTimeout(paintTimer); paintTimer = setTimeout(() => { if (R.buildMode) renderBuildBar(); }, 150);
+    return;
+  }
   if (S.obj[ty][tx] === 'weed' && t.to === 'path') S.obj[ty][tx] = null;
   S.ground[ty][tx] = t.to;
   R.paintCount = (R.paintCount || 0) + 1; R.paintCost = (R.paintCost || 0) + t.price;
@@ -806,8 +875,8 @@ function startPlace(kind) {
 function buildTap(tx, ty) {
   if (!R.build) return;
   if (R.build.pick) {   // mode pindah: pilih bangunan/dekorasi
-    const st = decoAt(tx, ty) || structAtTile(tx, ty, true);
-    if (!st) return msg('Ketuk kandang, lumbung, atau dekorasi yang mau dipindah.');
+    const st = decoAt(tx, ty) || S.structures.find(x => isBuilding(x) && inRect(footprint(x.kind, x.x, x.y), tx, ty));
+    if (!st) return msg('Ketuk rumah, toko, kandang, lumbung, atau dekorasi yang mau dipindah.');
     R.build = {kind: st.kind, x: st.x, y: st.y, moveId: st.id};
   } else {
     const d = BUILD[R.build.kind];
@@ -820,20 +889,20 @@ function renderBuildBar() {
   if (R.paint) {
     const t = TERRAIN[R.paint];
     bar.innerHTML = `<div class="bb-title">${t.icon} ${t.name}${t.price ? ` · ${t.price} G/petak` : ' · gratis'} <span class="muted">· ${S.gold.toLocaleString('id-ID')} G</span></div>
-      <div class="bb-hint">Ketuk atau geser jari di peta untuk mengecat petak. ${R.paintCount ? `Sudah ${R.paintCount} petak${R.paintCost ? ` (−${R.paintCost} G)` : ''}.` : ''}<br><span class="muted">Tidak bisa di atas bedeng, pohon, bangunan, air, atau lahan yang belum dibeli.</span></div>
+      <div class="bb-hint">${t.fence === 'jalanbatu' ? 'Geser jari di peta untuk memasang ubin batu.' : t.fence === 'jalantunggul' ? 'Geser jari di peta untuk memasang pijakan tunggul (bisa dilewati).' : t.fence === 'sungai' ? 'Geser jari di peta untuk membuat aliran sungai; alirannya menyambung sendiri. Sungai tidak bisa diseberangi.' : t.fence ? 'Geser jari di peta untuk membuat pagar; sambungannya menyatu sendiri.' : t.unfence ? 'Ketuk atau geser di atas pagar, jalan batu/tunggul, atau sungai untuk mencopotnya (uang kembali 50%).' : 'Ketuk atau geser jari di peta untuk mengecat petak.'} ${R.paintCount ? `Sudah ${R.paintCount} petak${R.paintCost > 0 ? ` (−${R.paintCost} G)` : R.paintCost < 0 ? ` (+${-R.paintCost} G)` : ''}.` : ''}<br><span class="muted">${t.unfence ? 'Pagar halaman kandang/lumbung ikut bangunannya dan pindah bersamanya.' : 'Tidak bisa di atas bedeng, pohon, bangunan, air, atau lahan yang belum dibeli.'}</span></div>
       <div class="bb-row">${Object.entries(TERRAIN).map(([k, x]) => `<button class="btn${k === R.paint ? ' primary' : ''}" data-paint="${k}">${x.icon} ${x.name}</button>`).join('')}<button class="btn primary" data-act="paintdone">✓ Selesai</button></div>`;
     return;
   }
   if (!R.build) {
     bar.innerHTML = `<div class="bb-title">🔨 Mode bangun <span class="muted">· ${S.gold.toLocaleString('id-ID')} G</span></div>
-      <div class="bb-list">${Object.entries(BUILD).map(([k, d]) => `<button class="bb-item" data-k="${k}" ${S.gold < d.price ? 'disabled' : ''}><span class="bb-ico">${d.icon}</span><b>${d.name}</b><small>${d.price.toLocaleString('id-ID')} G${d.cap ? ' · ' + d.cap + ' hewan' : ''}${d.note ? ' · ' + d.note : ''}</small></button>`).join('')}</div>
-      <div class="bb-title" style="margin-top:6px">🗺️ Tanah <span class="muted">· ketuk/geser di peta</span></div>
+      <div class="bb-list">${Object.entries(BUILD).filter(([, d]) => !d.fixed).map(([k, d]) => `<button class="bb-item" data-k="${k}" ${S.gold < d.price ? 'disabled' : ''}><span class="bb-ico">${d.icon}</span><b>${d.name}</b><small>${d.price.toLocaleString('id-ID')} G${d.cap ? ' · ' + d.cap + ' hewan' : ''}${d.note ? ' · ' + d.note : ''}</small></button>`).join('')}</div>
+      <div class="bb-title" style="margin-top:6px">🗺️ Tanah & pagar <span class="muted">· ketuk/geser di peta</span></div>
       <div class="bb-list">${Object.entries(TERRAIN).map(([k, t]) => `<button class="bb-item" data-paint="${k}"><span class="bb-ico">${t.icon}</span><b>${t.name}</b><small>${t.price ? t.price + ' G/petak' : 'gratis'} · ${t.note}</small></button>`).join('')}</div>
       <div class="bb-row"><button class="btn" data-act="move">↔ Pindahkan</button><button class="btn primary" data-act="done">Selesai</button></div>`;
     return;
   }
   if (R.build.pick) {
-    bar.innerHTML = `<div class="bb-title">↔ Pindahkan</div><div class="bb-hint">Ketuk kandang, lumbung, atau dekorasi yang mau dipindah.</div><div class="bb-row"><button class="btn" data-act="cancel">✕ Batal</button></div>`;
+    bar.innerHTML = `<div class="bb-title">↔ Pindahkan</div><div class="bb-hint">Ketuk rumah, toko, kandang, lumbung, atau dekorasi yang mau dipindah.</div><div class="bb-row"><button class="btn" data-act="cancel">✕ Batal</button></div>`;
     return;
   }
   const d = BUILD[R.build.kind], mv = R.build.moveId, ok = canPlace(R.build.kind, R.build.x, R.build.y, mv);
@@ -886,7 +955,7 @@ const fruitDaysLeft = t => t.days < FRUITS[t.type].grow ? FRUITS[t.type].grow - 
 function canPlantTree(tx, ty) {
   if (!inMap(tx, ty) || !['grass', 'field'].includes(S.ground[ty][tx]) || S.obj[ty][tx] || S.soil[ty][tx] || tileLocked(tx, ty)) return false;
   // seluruh area berpagar (padang & halaman ayam, termasuk depan pintu lumbung) tidak boleh ditanami
-  if (structAtTile(tx, ty, true)) return false;   // tapak kandang/lumbung (termasuk halaman berpagar)
+  if (structAtTile(tx, ty)) return false;   // tapak semua bangunan (halaman berpagar & depan pintu rumah/toko)
   // kotak badan petani tidak boleh tumpang tindih dengan petak pohon (supaya tidak terjebak)
   const p = S.player;
   return R.noChar || !(p.x + 4 > tx * T && p.x - 5 < tx * T + T && p.y + 1 > ty * T && p.y - 4 < ty * T + T);
@@ -1298,7 +1367,7 @@ function startShift(w) {
   if (w.job === 'petani' && S.season === 3) return `${d.icon} ${esc(w.name)} libur di musim dingin (tidak digaji).`;
   if (S.gold < workerWage(w)) return `${d.icon} ${esc(w.name)} libur: uangmu kurang untuk gaji ${workerWage(w)} G.`;
   cash(-workerWage(w), 'gaji');
-  S.shift.push({job: w.job, name: w.name, budget: 0, spd: statOf(w, 'spd'), luck: bonusChance(w), end: workEnd(w), x: START.x + (i % 3 - 1) * 14, y: START.y + 10 + Math.floor(i / 3) * 12, dir: 0, cool: 0, tgt: null,
+  S.shift.push({job: w.job, name: w.name, budget: 0, spd: statOf(w, 'spd'), luck: bonusChance(w), end: workEnd(w), x: homeSpot().x + (i % 3 - 1) * 14, y: homeSpot().y + 10 + Math.floor(i / 3) * 12, dir: 0, cool: 0, tgt: null,
     done: {panen: 0, buah: 0, tanam: 0, siram: 0, cangkul: 0, hasil: 0, makan: 0, elus: 0, bonus: 0}});
   return `${d.icon} ${esc(w.name)} bekerja hari ini sampai jam ${fmtTime(workEnd(w))} <span class="muted">(gaji −${workerWage(w)} G)</span>`;
 }
@@ -1453,7 +1522,7 @@ function newDay(passedOut = false) {
   notes.push(...staffWork());
   S.time = DAY_START;
   S.stamina = passedOut ? Math.floor(MAX_STAMINA / 2) : MAX_STAMINA;
-  S.player.x = START.x; S.player.y = START.y; S.player.dir = 'down';
+  { const h = homeSpot(); S.player.x = h.x; S.player.y = h.y; } S.player.dir = 'down';
   R.acc = 0; R.drops = []; R.particles = []; R.stumpHits = {};
   const saved = save();
   emit(passedOut ? 'faint' : 'day');
@@ -1861,6 +1930,9 @@ function update(dt) {
     if (R.pov) {   // mata petani: ▲ maju, ▼ mundur searah pandangan; belok lewat turn()
       const f = (k.up ? 1 : 0) - (k.down ? 1 : 0);
       [dx, dy] = DIRV[p.dir].map(v => v * f);
+    } else if ((dx || dy) && RND && RND.yaw && RND.yaw()) {   // kamera miring: arah tombol/joystick mengikuti layar
+      const a = RND.yaw(), c = Math.cos(a), s = Math.sin(a), r = v => Math.abs(v) < 1e-6 ? 0 : v;
+      [dx, dy] = [r(dx * c + dy * s), r(-dx * s + dy * c)];
     }
     R.moving = dx !== 0 || dy !== 0;
     if (R.moving && R.pov) {
@@ -1875,7 +1947,7 @@ function update(dt) {
         const keep = (p.dir === 'right' && dx > 0) || (p.dir === 'left' && dx < 0) || (p.dir === 'down' && dy > 0) || (p.dir === 'up' && dy < 0);
         if (!keep) p.dir = dy > 0 ? 'down' : 'up';
       }
-      const sp = (S.stamina <= 0 ? 40 : 64) * dt * (dx && dy ? 0.7071 : 1);
+      const sp = (S.stamina <= 0 ? 40 : 64) * dt / (Math.hypot(dx, dy) || 1);
       const nx = p.x + dx * sp, ny = p.y + dy * sp;
       if (!blocked(nx, p.y)) p.x = nx;
       if (!blocked(p.x, ny)) p.y = ny;
@@ -2210,7 +2282,8 @@ addEventListener('pointermove', e => {
 let pan = null, pinch = null;
 const pointers = new Map();
 function panBy(dx, dy) {
-  const f = R.camFocus;
+  const f = R.camFocus, a = RND && RND.yaw ? RND.yaw() : 0;   // kamera miring: arah geser layar diputar ke arah dunia
+  if (a) { const c = Math.cos(a), s = Math.sin(a); [dx, dy] = [dx * c + dy * s, -dx * s + dy * c]; }
   f.x = clamp(f.x + dx, 3 * T, (MW - 3) * T); f.y = clamp(f.y + dy, 3 * T, (MH - 2) * T);
 }
 addEventListener('pointerdown', e => {
@@ -2246,7 +2319,7 @@ function setNoChar(on, toggled) {
   try { localStorage.setItem('kebunPelangi.nochar', on ? '1' : '0'); } catch (e) { /* abaikan */ }
   document.body.classList.toggle('nochar', on);
   if (on && S && toggled) R.camFocus = {x: S.player.x, y: S.player.y};   // beralih dari mode petani: mulai dari posisinya
-  if (!on && S && blocked(S.player.x, S.player.y)) { S.player.x = START.x; S.player.y = START.y; }   // keluar dari pohon yang ditanam di posisinya
+  if (!on && S && blocked(S.player.x, S.player.y)) { const h = homeSpot(); S.player.x = h.x; S.player.y = h.y; }   // keluar dari pohon yang ditanam di posisinya
   if (on && R.pov && RND.cycleCamera) RND.cycleCamera();   // kamera mata petani tidak dipakai tanpa karakter
   $('keys').innerHTML = on ? 'Geser layar/mouse: lihat sekitar<br>Cubit/scroll: zoom<br>WASD/panah: geser kamera<br>Ketuk: tanam, siram, panen, beri makan<br>1-8 / Q: ganti alat · I: tas<br>Esc: menu'
     : 'WASD/Panah: jalan<br>Spasi/J: pakai alat<br>E/K: periksa/ambil<br>1-8 / Q: ganti alat<br>R: ganti benih · I: tas<br>V: kamera · M: suara<br>Esc: menu';
@@ -2403,8 +2476,8 @@ function boot() {
   RND.resize();
   // pilihan tampilan di layar judul
   const is3d = RND === Renderers['3d'], rich = is3d && window.Real3D && Real3D.enabled;
-  const cur = rich ? (Real3D.toon ? '?kartun' : '?') : is3d ? '?lowpoly' : '?2d';
-  const modes = ok3d ? [['?', '3D Realistis'], ['?kartun', '3D Kartun'], ['?lowpoly', '3D Low-poly'], ['?2d', '2D Piksel']] : [['?2d', '2D Piksel']];
+  const cur = rich ? (Real3D.ceria ? '?' : Real3D.toon ? '?kartun' : '?realistis') : is3d ? '?lowpoly' : '?2d';
+  const modes = ok3d ? [['?', '3D Ceria'], ['?realistis', '3D Realistis'], ['?kartun', '3D Kartun'], ['?lowpoly', '3D Low-poly'], ['?2d', '2D Piksel']] : [['?2d', '2D Piksel']];
   $('modeLink').innerHTML = 'Tampilan: ' + modes.map(([href, name]) => href === cur ? `<b>${name}</b>` : `<a href="${href}">${name}</a>`).join(' · ') +
     (ok3d ? '' : ' <span class="muted">(3D butuh internet)</span>');
   document.body.classList.add('mode-' + (RND === Renderers['3d'] ? '3d' : '2d'));

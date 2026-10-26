@@ -5,7 +5,9 @@
   if (!window.THREE) return;
   const enabled = !/[?&](lowpoly|2d)\b/.test(location.search);
   // gaya: 'real' (bawaan) atau 'kartun' (?kartun, cerah ala game bertani kasual)
-  const style = /[?&]kartun\b/.test(location.search) ? 'kartun' : 'real', toon = style === 'kartun';
+  // ?ceria = gaya cerah ala game bertani kasual (pohon cemara & pohon gugur, pagar putih, bunga di tepi jalan)
+  const style = /[?&]kartun\b/.test(location.search) ? 'kartun' : /[?&]realistis\b/.test(location.search) ? 'real' : 'ceria';   // bawaan: Ceria
+  const ceria = style === 'ceria', toon = style === 'kartun' || ceria;
 
   /* ---------- noise ---------- */
   function vnoise(x, y) {
@@ -31,6 +33,7 @@
   function shadeToon(u, v, gt, out) {
     const mid = fbm(u * 0.9, v * 0.9), soft = fbm(u * 2.2 + 9, v * 2.2), f = vnoise(u * 5, v * 5);
     out[3] = 0;
+    if (ceria) return shadeCeria(u, v, gt, out, mid, soft, f);
     switch (gt) {
       case 'path': {
         const stone = vnoise(u * 6 + 2, v * 6) > 0.84;
@@ -47,6 +50,32 @@
           return;
         }
         out[0] = lerp(92, 128, mid) + (f - 0.5) * 10; out[1] = lerp(180, 214, mid) + (f - 0.5) * 12; out[2] = lerp(54, 74, mid);
+      }
+    }
+  }
+  // palet ceria: rumput hijau terang berbintik cahaya, jalan tanah krem-oranye hangat, ladang cokelat kemerahan
+  function shadeCeria(u, v, gt, out, mid, soft, f) {
+    const fine = vnoise(u * 26, v * 26), g = fine - 0.5;
+    switch (gt) {
+      case 'path': {   // jalan tanah terakota, tepi sedikit lebih gelap, butiran halus
+        const k = 0.93 + (soft - 0.5) * 0.14 + g * 0.08;
+        out[0] = lerp(178, 198, mid) * k; out[1] = lerp(96, 114, mid) * k; out[2] = lerp(58, 72, mid) * k; out[3] = 120 + fine * 60;
+        return;
+      }
+      case 'field': {   // ladang dibajak: tanah cokelat kemerahan dengan alur terang-gelap berselang
+        const k = 0.92 + fbm(u * 4.5, v * 4.5, 3) * 0.16, row = smooth(0.25, 0.75, 0.5 + 0.5 * Math.sin(v * Math.PI * 6));
+        out[0] = lerp(108, 170, row) * k; out[1] = lerp(56, 98, row) * k; out[2] = lerp(32, 58, row) * k; out[3] = 255 * fine; return;
+      }
+      case 'water': out[0] = 70; out[1] = 160; out[2] = 196; out[3] = 0; return;
+      default: {   // rumput: hijau lembut, sapuan terang-gelap seperti lukisan, bintik helai rumput
+        const fl = vnoise(u * 7 + 11, v * 7 + 3);
+        if (fl > 0.955) { const k = Math.floor(vnoise(u * 2, v * 2) * 3); out[0] = [250, 246, 236][k]; out[1] = [250, 168, 220][k]; out[2] = [240, 200, 120][k]; out[3] = 200; return; }
+        const light = smooth(0.5, 0.78, fbm(u * 0.5 + 2, v * 0.5 + 5)) * 0.4, dark = smooth(0.55, 0.8, fbm(u * 0.8 + 9, v * 0.8 + 1)) * 0.25;
+        const blade = vnoise(u * 40 + 3, v * 40) > 0.72 ? -14 : 0;
+        out[0] = lerp(lerp(lerp(118, 140, mid), 168, light), 92, dark) + g * 14 + blade * 0.6;
+        out[1] = lerp(lerp(lerp(176, 196, mid), 214, light), 150, dark) + g * 16 + blade;
+        out[2] = lerp(lerp(lerp(52, 62, mid), 82, light), 44, dark) + g * 8;
+        out[3] = 255 * (fine * 0.6 + mid * 0.4);
       }
     }
   }
@@ -155,7 +184,8 @@
       return t;
     };
     const map = tex(cc, true), bump = tex(bc, false);
-    const material = new THREE.MeshStandardMaterial(toon ? {map, roughness: 1, metalness: 0}
+    const material = new THREE.MeshStandardMaterial(ceria ? {map, bumpMap: bump, bumpScale: 0.025, roughness: 0.95, metalness: 0, envMapIntensity: 0.3}
+      : toon ? {map, roughness: 1, metalness: 0}
       : {map, bumpMap: bump, bumpScale: 0.035, roughness: 0.95, metalness: 0, envMapIntensity: 0.4});
     // tekstur detail kecil yang diulang 4x per petak, dikalikan ke warna → tajam dari dekat
     const detail = new THREE.CanvasTexture(detailCanvas());
@@ -166,7 +196,7 @@
       sh.fragmentShader = 'uniform sampler2D uDetail;\n' + sh.fragmentShader.replace('#include <map_fragment>',
         `#include <map_fragment>
         vec3 dt = texture2D(uDetail, vUv * vec2(${MW * 4}.0, ${MH * 4}.0)).rgb;
-        diffuseColor.rgb *= mix(vec3(1.0), dt * 2.0, ${toon ? '0.25' : '0.0'});`);
+        diffuseColor.rgb *= mix(vec3(1.0), dt * 2.0, ${ceria ? '0.35' : toon ? '0.25' : '0.0'});`);
     };
     return {
       material,
@@ -226,7 +256,7 @@
   function blade() {
     if (bladeGeo) return bladeGeo;
     // helai 1 unit tinggi, meruncing; normal menghadap atas supaya menyatu dengan cahaya tanah
-    const pos = [], col = [], nor = [], seg = 3, base = lin(toon ? '#3f9a2a' : '#2c4a1a'), tip = lin(toon ? '#a8e65a' : '#9cc45a');
+    const pos = [], col = [], nor = [], seg = 3, base = lin(ceria ? '#5a9a2c' : toon ? '#3f9a2a' : '#2c4a1a'), tip = lin(ceria ? '#b4dc6a' : toon ? '#a8e65a' : '#9cc45a');
     const at = i => { const t = i / seg, w = 0.5 * (1 - t * 0.85); return [[-w, t], [w, t]]; };
     for (let i = 0; i < seg; i++) {
       const [a, b] = at(i), [c, d] = at(i + 1);
@@ -243,9 +273,10 @@
   const grassMat = () => grassMat.m || (grassMat.m = windMaterial());
   function makeGrass(lite) {
     // kumpulan rumput 1,5× kepadatan "Tinggi" (42/petak); level grafik memakai sebagian (mesh.count)
-    const per = toon ? (lite ? 3 : 6) : (lite ? 18 : 63), spots = [];   // kartun: hanya rumpun kecil
+    const per = ceria ? (lite ? 6 : 14) : toon ? (lite ? 3 : 6) : (lite ? 18 : 63), spots = [];   // kartun: hanya rumpun kecil
     for (let ty = 1; ty < MH - 1; ty++) for (let tx = 1; tx < MW - 1; tx++) {
       if (S.ground[ty][tx] !== 'grass' || SOLID.has(S.obj[ty][tx]) || tileLocked(tx, ty)) continue;   // tidak tembus bangunan/palung; hutan terkunci tanpa rumput
+      if (S.obj[ty][tx] === 'flower') { const d = decoAt(tx, ty); if (d && (d.kind === 'jalanbatu' || d.kind === 'jalantunggul')) continue; }   // pijakan: tanpa rumput menembus
       if ((tx === 24 || tx === 29) && (ty === 3 || ty === 7)) continue;   // sudut kolam tertutup air
       for (let i = 0; i < per; i++) spots.push([tx + h2(tx, ty, i * 2 + 100), ty + h2(tx, ty, i * 2 + 101), h2(tx, ty, i + 300)]);
     }
@@ -346,9 +377,32 @@
     const trunk = new THREE.CylinderGeometry(0.07, 0.13, 1, 7), greens = toon ? ['#46a834', '#58bf3e', '#3d962e'] : ['#355f24', '#3f6e2a', '#4a7a30'];
     // pohon: batang meruncing + 2 cabang + 9 gerombol daun membentuk kubah (dalam lebih gelap, luar lebih terang)
     const branch = new THREE.CylinderGeometry(0.025, 0.05, 1, 6).translate(0, 0.5, 0);
-    const leafTones = toon ? ['#3d962e', '#46a834', '#58bf3e', '#6acb4a'] : ['#2c5220', '#355f24', '#3f6e2a', '#4f7f34'];
-    const treeGeo = i => {
-      const bark = toon ? '#8a5a32' : '#5b3e28';
+    const leafTones0 = toon ? ['#3d962e', '#46a834', '#58bf3e', '#6acb4a'] : ['#2c5220', '#355f24', '#3f6e2a', '#4f7f34'];
+    // gaya ceria: cemara bertingkat (kerucut bertumpuk) dan pohon gugur warna-warni
+    const coneG = new THREE.ConeGeometry(0.5, 1, 9);
+    const pineGeo = i => hayPineGeo(i);
+    const AUTUMN = {
+      orange: ['#b4521e', '#de7a2a', '#e98e33', '#f2a03d'],
+      yellow: ['#c99418', '#dfb224', '#efc83a', '#f7dc62'],
+      red:    ['#8e1f22', '#c2302e', '#d4433b', '#e5574c'],
+      green:  ['#3c6f24', '#4c862c', '#649f37', '#84b947'],   // ek hijau rindang (gelap di bawah, terang di puncak)
+    };
+    // ceria: tajuk bulat penuh dari banyak gumpalan bertumpuk (bawah gelap, puncak terang), batang lebih tebal
+    const fluffyGeo = (i, tones) => {
+      const parts = [{geo: trunk, color: '#5e4330', m: M4(0, 0.5, 0, 1.35, 1.0, 1.35)}];
+      for (const [a, tl] of [[i * 1.7, 0.6], [i * 1.7 + 3.1, 0.55]])   // batang bercabang seperti desain
+        parts.push({geo: branch, color: '#5e4330', m: new THREE.Matrix4().compose(new THREE.Vector3(0, 0.75, 0), new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.sin(a) * tl, 0, Math.cos(a) * tl)), new THREE.Vector3(1.6, 0.75, 1.6))});
+      parts.push({geo: blobGeo(i % 4, 2, 0.2), color: tones[0], m: M4(0, 1.4, 0, 1.25, 1.0, 1.25)});
+      const ring = (n, r, y, sz, tone, off) => { for (let k = 0; k < n; k++) {
+        const a = k / n * Math.PI * 2 + i * 0.9 + off, s2 = sz * (0.85 + h2(i, k + off * 10, 9) * 0.3);
+        parts.push({geo: blobGeo((i + k) % 5, 2, 0.24), color: tones[tone], m: M4(Math.cos(a) * r, y + h2(i, k, 4) * 0.1, Math.sin(a) * r, s2, s2 * 0.85, s2)});
+      } };
+      ring(7, 0.5, 1.15, 0.62, 1, 0); ring(6, 0.38, 1.55, 0.6, 2, 0.4); ring(3, 0.18, 1.88, 0.55, 3, 0.9);
+      parts.push({geo: blobGeo((i + 3) % 5, 2, 0.2), color: tones[3], m: M4(0, 2.05, 0, 0.55, 0.45, 0.55)});
+      return mergeParts(parts);
+    };
+    const treeGeo = (i, tonesOverride) => {
+      const leafTones = tonesOverride || leafTones0, bark = toon ? '#8a5a32' : '#5b3e28';
       const parts = [{geo: trunk, color: bark, m: M4(0, 0.55, 0, 1.05, 1.1, 1.05)}];
       for (const [a, tilt] of [[i * 1.3, 0.75], [i * 1.3 + 2.6, 0.6]]) {
         const br = new THREE.Matrix4().compose(new THREE.Vector3(0, 0.8, 0), new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.sin(a) * tilt, 0, Math.cos(a) * tilt)), new THREE.Vector3(1, 0.7, 1));
@@ -364,15 +418,33 @@
       parts.push({geo: blobGeo((i + 2) % 5, 2, 0.26), color: leafTones[3], m: M4(0.05, 1.95, -0.03, 0.6, 0.5, 0.6)});   // pucuk terang
       return mergeParts(parts);
     };
-    const bushGeo = i => mergeParts([
-      {geo: blobGeo(i % 4, 2, 0.22), color: '#3a6b28', m: M4(0, 0.32, 0, 1.2, 0.65, 1.05)},
-      {geo: blobGeo((i + 1) % 4, 2, 0.22), color: '#4a7d30', m: M4(0.12 * (i - 0.5), 0.55, 0.05, 0.7, 0.45, 0.7)},
-    ]);
-    const kinds = [0, 1, 2, 3].map(i => ({geo: treeGeo(i), list: []})).concat([0, 1].map(i => ({geo: bushGeo(i), list: []})));
+    const bushGeo = i => {
+      const parts = [
+        {geo: blobGeo(i % 4, 2, 0.22), color: ceria ? '#4f8a2e' : '#3a6b28', m: M4(0, 0.32, 0, 1.2, 0.65, 1.05)},
+        {geo: blobGeo((i + 1) % 4, 2, 0.22), color: ceria ? '#6aa83e' : '#4a7d30', m: M4(0.12 * (i - 0.5), 0.55, 0.05, 0.7, 0.45, 0.7)},
+      ];
+      if (ceria) {   // semak bunga: bunga kuning bertengah jingga tersebar di permukaan
+        const fl = new THREE.IcosahedronGeometry(0.5, 0);
+        for (let k = 0; k < 12; k++) {
+          const a = k * 2.39 + i, up = 0.3 + (k % 4) * 0.09, rr = 0.55 - (k % 4) * 0.1;
+          parts.push({geo: fl, color: '#f6c433', m: M4(Math.cos(a) * rr, up + 0.12, Math.sin(a) * rr * 0.88, 0.1, 0.06, 0.1)});
+        }
+      }
+      return mergeParts(parts);
+    };
+    const kinds = ceria
+      // ceria: 0–2 cemara, 3 oranye, 4 kuning, 5 merah, 6 hijau, 7–8 semak
+      ? [0, 1, 2].map(i => ({geo: pineGeo(i), list: []}))
+          .concat(['orange', 'yellow', 'red', 'green'].map((k, i) => ({geo: fluffyGeo(i, AUTUMN[k]), list: []})))
+          .concat([0, 1].map(i => ({geo: bushGeo(i), list: []})))
+      : [0, 1, 2, 3].map(i => ({geo: treeGeo(i), list: []})).concat([0, 1].map(i => ({geo: bushGeo(i), list: []})));
     for (let ty = 0; ty < MH; ty++) for (let tx = 0; tx < MW; tx++) {
       if (S.obj[ty][tx] !== 'tree') continue;
       const bush = ty === MH - 1, v = h2(tx, ty, 3);
-      kinds[bush ? 4 + (tx % 2) : (tx + ty) % 4].list.push([tx, ty, v, bush]);
+      if (ceria) {
+        const r = h2(tx, ty, 41);   // ±35% cemara, ±37% ek hijau, sisanya pohon gugur warna-warni
+        kinds[bush ? 7 + (tx % 2) : r < 0.35 ? Math.floor(r / 0.117) : r < 0.72 ? 6 : r < 0.84 ? 3 : r < 0.94 ? 4 : 5].list.push([tx, ty, v, bush]);
+      } else kinds[bush ? 4 + (tx % 2) : (tx + ty) % 4].list.push([tx, ty, v, bush]);
     }
     // hutan dipecah per blok 8×8 petak agar blok di luar layar tidak digambar (tampilan tetap sama, GPU jauh lebih ringan).
     // Tiap blok memakai atribut geometri yang sama (tanpa salinan memori) dengan bola batas seluas bloknya.
@@ -401,7 +473,41 @@
         G.add(mesh);
       }
     }
-    G.userData.dispose = () => { for (const k of kinds) k.geo.dispose(); G.children.forEach(c => c.dispose()); };
+    G.userData.dispose = () => { for (const k of kinds) k.geo.dispose(); G.children.forEach(c => { if (c.geometry) c.geometry.dispose(); c.dispose(); }); };
+    return G;
+  }
+
+  /* ---------- gaya ceria: rumpun bunga di tepi jalan (pink, putih, ungu), ikut bergoyang ---------- */
+  function makeFlowers() {
+    const G = new THREE.Group();
+    if (!ceria) return G;
+    const ico = new THREE.IcosahedronGeometry(0.5, 0);
+    const clump = petal => mergeParts([
+      {geo: ico, color: '#3f9a36', m: M4(0, 0.07, 0, 0.42, 0.16, 0.42)},
+      ...[[0.1, 0.02], [-0.09, 0.07], [0.02, -0.1], [-0.05, -0.04], [0.08, 0.1]].map(([x, z], k) =>
+        ({geo: ico, color: k === 3 ? '#ffd84a' : petal, m: M4(x, 0.17 + (k % 2) * 0.04, z, 0.12, 0.09, 0.12)})),
+    ]);
+    const kinds = ['#ff8fc8', '#fffaf2', '#c79bff'].map(c => ({geo: clump(c), list: []}));
+    const isPath = (x, y) => x >= 0 && y >= 0 && x < MW && y < MH && S.ground[y][x] === 'path';
+    for (let ty = 1; ty < MH - 1; ty++) for (let tx = 1; tx < MW - 1; tx++) {
+      if (S.ground[ty][tx] !== 'grass' || S.obj[ty][tx] || S.soil[ty][tx] || tileLocked(tx, ty) || structAtTile(tx, ty)) continue;
+      const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => isPath(tx + dx, ty + dy));
+      if (!dirs.length || h2(tx, ty, 61) > 0.75) continue;
+      for (const [dx, dy] of dirs) for (let k = 0; k < 2; k++) {   // dua rumpun berjajar di sisi yang berbatasan dengan jalan
+        const along = (k + 0.5) / 2 + (h2(tx, ty, 70 + k) - 0.5) * 0.2;
+        const x = dx ? tx + (dx > 0 ? 0.85 : 0.15) : tx + along, z = dy ? ty + (dy > 0 ? 0.85 : 0.15) : ty + along;
+        kinds[Math.floor(h2(tx + dx, ty + dy, 80 + k) * 3)].list.push([x, z, h2(tx, ty, 90 + k)]);
+      }
+    }
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), sc = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+    for (const k of kinds) {
+      if (!k.list.length) continue;
+      const mesh = new THREE.InstancedMesh(k.geo, treeMat(), k.list.length);
+      k.list.forEach(([x, z, r], i) => { q.setFromAxisAngle(up, r * 6.28); mesh.setMatrixAt(i, m.compose(p.set(x, 0, z), q, sc.setScalar(0.9 + r * 0.5))); });
+      mesh.castShadow = false; mesh.receiveShadow = true;
+      G.add(mesh);
+    }
+    G.userData.dispose = () => { for (const k of kinds) k.geo.dispose(); G.children.forEach(c => { if (c.geometry) c.geometry.dispose(); c.dispose(); }); };
     return G;
   }
 
@@ -575,5 +681,40 @@
     };
   }
 
-  window.Real3D = {enabled, style, toon, sunFromTime, rockGeo, stumpGeo, makeTrees, lin, vnoise, makeGround, makeGrass, weedTuft, blobGeo, windMaterial, planks, shingles, makeWater, makeSky, wind};
+  // cemara (aset desain "Pohon Cemara"): 4 tingkat kerucut cekung bertumpuk, tepi bawah bergelombang membulat
+  // dan menjuntai; hijau cerah di atas, lebih gelap di gelombang bawah; batang cokelat tebal; buah pinus kecil
+  const PINES = {};
+  function scallopGeo(lobes, seed) {
+    const seg = lobes * 4, g = new THREE.ConeGeometry(1, 1, seg, 4, true), P = g.attributes.position, col = [];
+    for (let i = 0; i < P.count; i++) {
+      const x = P.getX(i), y = P.getY(i), z = P.getZ(i), r = Math.hypot(x, z), t = 0.5 - y;   // t: 0 pucuk … 1 dasar
+      let k = 1.3 - t * 0.45;
+      if (r > 1e-4) {
+        const ang = Math.atan2(z, x) + seed, wave = 0.5 + 0.5 * Math.cos(ang * lobes);
+        const flare = Math.pow(t, 1.35);                       // sisi cekung, melebar di bawah
+        const rr = flare * (t > 0.99 ? 1 + 0.05 * wave : 1), drop = t > 0.99 ? -0.16 * wave : 0;
+        P.setXYZ(i, x / r * rr, y + drop, z / r * rr);
+        if (t > 0.99) k = 0.62 + 0.18 * (1 - wave);
+      }
+      col.push(k, k, k);
+    }
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.computeVertexNormals();
+    return g;
+  }
+  function hayPineGeo(i) {
+    const key = i % 3;
+    if (PINES[key]) return PINES[key];
+    const parts = [{geo: new THREE.CylinderGeometry(0.08, 0.1, 1, 8), color: '#7c5130', m: M4(0, 0.25, 0, 1, 0.5, 1)}];
+    // [pucuk, dasar, setengah lebar] tiap tingkat dari bawah ke atas (perbandingan dari desain "Layout Mesin": 6 tingkat ramping)
+    const tiers = [[1.93, 0.32, 0.83], [2.21, 0.78, 0.73], [2.49, 1.24, 0.62], [2.73, 1.68, 0.51], [2.95, 2.11, 0.4], [3.2, 2.5, 0.27]];
+    const q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), p = new THREE.Vector3(), sc = new THREE.Vector3();
+    tiers.forEach(([top, bot, hw], k) => {
+      const h = top - bot, w = hw * (1 + (h2(key, k, 5) - 0.5) * 0.08);
+      q.setFromAxisAngle(up, k * 0.9 + key * 1.3);
+      parts.push({geo: scallopGeo(7 - Math.min(k, 3), key + k), color: '#4a7d35', m: new THREE.Matrix4().compose(p.set(0, bot + h / 2, 0), q, sc.set(w, h, w))});
+    });
+    return (PINES[key] = mergeParts(parts));
+  }
+  window.Real3D = {enabled, style, toon, ceria, makeFlowers, hayPineGeo, sunFromTime, rockGeo, stumpGeo, makeTrees, lin, vnoise, makeGround, makeGrass, weedTuft, blobGeo, windMaterial, planks, shingles, makeWater, makeSky, wind};
 })();
