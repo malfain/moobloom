@@ -86,6 +86,15 @@
         G.rotation.y = v * 6;
         return G;
       case 'stump':
+        if (RL.ceria) {   // tunggul kartun: kulit cokelat, potongan krem dengan cincin kayu, akar kecil
+          G.add(part(CYL(), '#8a5a35', 0, 0.15, 0, 0.5, 0.3, 0.5));
+          G.add(part(CYL(), '#e3b57e', 0, 0.305, 0, 0.44, 0.015, 0.44));
+          G.add(part(CYL(), '#b9834f', 0, 0.314, 0, 0.26, 0.006, 0.26));
+          G.add(part(CYL(), '#9c6a3a', 0, 0.318, 0, 0.08, 0.006, 0.08));
+          for (let i = 0; i < 3; i++) { const a = i * 2.1 + v; G.add(tilt(part(CYL(), '#7a4d2d', Math.cos(a) * 0.26, 0.04, Math.sin(a) * 0.26, 0.09, 0.2, 0.09), Math.sin(a) * 1.1, -Math.cos(a) * 1.1)); }
+          G.rotation.y = v * 6;
+          return G;
+        }
         G.add(part(RL.stumpGeo(), matV('#ffffff'), 0, 0, 0, 1, 1, 1));
         G.rotation.y = v * 6;
         return G;
@@ -249,10 +258,9 @@
         const lf = c => RL ? matV(c) : c;
         for (const [x, y, z, s2, c] of [[0, 0.3, 0, 0.8, '#4f8a2e'], [-0.24, 0.26, 0.12, 0.5, '#5f9a36'], [0.25, 0.27, 0.1, 0.5, '#5f9a36'], [0, 0.26, -0.22, 0.5, '#4f8a2e'], [0.02, 0.55, 0.02, 0.5, '#79b545']])
           G.add(part(ICO(), lf(c), x, y, z, s2, s2 * 0.85, s2));
-        for (let i = 0; i < 14; i++) {   // bunga kuning bertengah jingga di permukaan semak
+        for (let i = 0; i < 9; i++) {   // bunga kuning di permukaan semak (sedikit potongan agar ringan di HP)
           const a = i * 2.39 + v * 6, up = 0.25 + (i % 4) * 0.12, rr = 0.42 - (up - 0.25) * 0.55;
-          G.add(part(SPH(), '#ffd84a', Math.cos(a) * rr, up + 0.1, Math.sin(a) * rr, 0.13, 0.07, 0.13));
-          G.add(part(SPH(), '#d06a1c', Math.cos(a) * (rr + 0.01), up + 0.13, Math.sin(a) * (rr + 0.01), 0.04, 0.03, 0.04));
+          G.add(part(SPH(), i % 3 ? '#ffd84a' : '#f6b62e', Math.cos(a) * rr, up + 0.1, Math.sin(a) * rr, 0.14, 0.08, 0.14));
         }
         break;
       }
@@ -262,7 +270,6 @@
           const h = 0.07 + h2(tx, ty, Math.round(x * 20 + z * 7)) * 0.04;
           G.add(part(CYL(), '#8a5a35', x, h / 2, z, 0.2 * s2, h, 0.2 * s2));
           G.add(part(CYL(), '#e3b57e', x, h + 0.004, z, 0.18 * s2, 0.012, 0.18 * s2));
-          G.add(part(CYL(), '#b9834f', x, h + 0.011, z, 0.08 * s2, 0.006, 0.08 * s2));
         }
         G.rotation.y = Math.floor(v * 4) * Math.PI / 2;
         break;
