@@ -121,9 +121,12 @@
   }
 
   function schedule() {
-    if (!cur) return;
+    if (!cur || !ac || ac.state !== 'running') return;   // audio dijeda/terganggu (mis. iPhone merekam layar): jangan menjadwalkan apa pun
     const spb = 60 / cur.tr.bpm / 2;   // detik per seperdelapan
-    while (nextT < ac.currentTime + 0.25) {
+    // jam audio melompat jauh (tab sempat dijeda, gangguan audio iOS): lompati nada yang terlewat, jangan dikejar semua
+    if (nextT < ac.currentTime - 0.1) nextT = ac.currentTime + 0.05;
+    let n = 0;
+    while (nextT < ac.currentTime + 0.25 && n++ < 8) {
       const tr = cur.tr, bars = tr.chords.length, total = bars * 8, s = step % total, bar = Math.floor(s / 8), inBar = s % 8;
       const loop = Math.floor(step / total), t = nextT + (inBar % 2 ? tr.swing * spb : 0);
       const ch = chordNotes(tr.chords[bar]);

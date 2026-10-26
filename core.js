@@ -2336,11 +2336,27 @@ let last = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  try {
-    if (S && R.running && !R.modal) update(dt);
-    if (S) { RND.draw(); updateHUD(); }
-  } catch (e) { console.error(e); }
+  // logika, gambar, dan HUD dijalankan terpisah: bila grafik bermasalah, game & jam tetap berjalan
+  try { if (S && R.running && !R.modal) update(dt); } catch (e) { reportError('logika', e); }
+  try { if (S) RND.draw(); } catch (e) { reportError('grafik', e); }
+  try { if (S) updateHUD(); } catch (e) { reportError('tampilan', e); }
 }
+// tampilkan error sekali (agar bisa difoto/dilaporkan), lalu diam
+const seenErr = new Set();
+function reportError(part, e) {
+  console.error(e);
+  const key = part + ':' + (e && e.message);
+  if (seenErr.has(key)) return;
+  seenErr.add(key);
+  msg(`⚠️ Error ${part}: ${(e && e.message || e).toString().slice(0, 120)}`);
+}
+// grafik 3D hilang (HP kehabisan memori grafis, mis. saat merekam layar): simpan lalu muat ulang halaman
+addEventListener('webglcontextlost', e => {
+  e.preventDefault();
+  try { if (S && R.running) save(); } catch (er) { /* abaikan */ }
+  msg('Grafik HP sempat terputus — memuat ulang game…');
+  setTimeout(() => location.reload(), 1500);
+}, true);
 function showTitle() {
   hideSeedPop(); drag.on = false; closeBuild();
   $('title').hidden = false;
